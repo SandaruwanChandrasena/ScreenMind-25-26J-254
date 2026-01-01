@@ -1,4 +1,6 @@
 import React, { useContext, useState } from 'react';
+import Icon from 'react-native-vector-icons/Ionicons';
+
 import {
   View,
   Text,
@@ -16,6 +18,7 @@ import { ThemeContext } from '../context/ThemeContext';
 import GlassCard from '../components/GlassCard';
 
 export default function SignUpScreen({ navigation }) {
+  const [showPassword, setShowPassword] = useState(false);
   const { signUp } = useContext(AuthContext);
   const { theme } = useContext(ThemeContext);
   const { colors } = theme;
@@ -47,25 +50,40 @@ export default function SignUpScreen({ navigation }) {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <Text style={[styles.title, { color: colors.textPrimary }]}>Create your account</Text>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={[styles.title, { color: colors.textPrimary }]}>
+          Create your account
+        </Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           Calm mind. Healthy habits. One step at a time.
         </Text>
 
         <GlassCard style={{ marginTop: 18 }}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Name</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Name
+          </Text>
           <TextInput
-            style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
+            style={[
+              styles.input,
+              { color: colors.textPrimary, borderColor: colors.border },
+            ]}
             placeholder="Your name"
             placeholderTextColor={colors.textSecondary}
             value={name}
             onChangeText={setName}
           />
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Email</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Email
+          </Text>
           <TextInput
-            style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
+            style={[
+              styles.input,
+              { color: colors.textPrimary, borderColor: colors.border },
+            ]}
             placeholder="example@email.com"
             placeholderTextColor={colors.textSecondary}
             autoCapitalize="none"
@@ -74,15 +92,28 @@ export default function SignUpScreen({ navigation }) {
             onChangeText={setEmail}
           />
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Password</Text>
-          <TextInput
-            style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
-            placeholder="••••••••"
-            placeholderTextColor={colors.textSecondary}
-            secureTextEntry
-            value={password}
-            onChangeText={setPassword}
-          />
+          <Text style={[styles.label, { color: colors.textSecondary }]}>
+            Password
+          </Text>
+          <View
+            style={[styles.passwordContainer, { borderColor: colors.border }]}
+          >
+            <TextInput
+              style={[styles.passwordInput, { color: colors.textPrimary }]}
+              placeholder="••••••••"
+              placeholderTextColor={colors.textSecondary}
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <Icon
+                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                size={20}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
@@ -90,12 +121,18 @@ export default function SignUpScreen({ navigation }) {
             disabled={loading}
             activeOpacity={0.9}
           >
-            <Text style={styles.primaryBtnText}>{loading ? 'Creating...' : 'Sign Up'}</Text>
+            <Text style={styles.primaryBtnText}>
+              {loading ? 'Creating...' : 'Sign Up'}
+            </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => navigation.navigate('SignIn')} style={{ marginTop: 14 }}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('SignIn')}
+            style={{ marginTop: 14 }}
+          >
             <Text style={[styles.link, { color: colors.accent }]}>
-              Already have an account? <Text style={{ fontWeight: '800' }}>Sign In</Text>
+              Already have an account?{' '}
+              <Text style={{ fontWeight: '800' }}>Sign In</Text>
             </Text>
           </TouchableOpacity>
         </GlassCard>
@@ -127,4 +164,17 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: '#fff', fontWeight: '900', fontSize: 16 },
 
   link: { textAlign: 'center', fontWeight: '600' },
+
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 12,
+  },
 });
