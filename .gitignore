@@ -87,11 +87,15 @@ htmlcov/
 .pytest_cache/
 
 ####################################
-# FIREBASE
+# FIREBASE & SECURITY KEYS
 ####################################
 firebase-debug.log
 .firestore/
 .storage/
+
+# CRITICAL: Do not commit these keys
+serviceAccountKey.json
+google-services.json
 
 ####################################
 # IDE / EDITORS
