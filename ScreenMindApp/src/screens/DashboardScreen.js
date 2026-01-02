@@ -7,18 +7,10 @@ import { spacing } from "../theme/spacing";
 
 import DashboardBackground from "../components/DashboardBackground";
 import FeatureCard from "../components/FeatureCard";
-import PrimaryButton from "../components/PrimaryButton";
+
 
 export default function DashboardScreen() {
-  const { user, signOut } = useContext(AuthContext);
-
-  const onLogout = async () => {
-    try {
-      await signOut();
-    } catch (e) {
-      console.log("Logout error:", e);
-    }
-  };
+  const { user } = useContext(AuthContext);
 
   // Dummy summary (later replace with your ML predictions)
   const overallRisk = "Moderate";
@@ -83,10 +75,6 @@ export default function DashboardScreen() {
           />
         </View>
 
-        {/* Logout (keep your style — this is a nice default) */}
-        <View style={{ height: spacing.lg }} />
-        <PrimaryButton title="Log Out" onPress={onLogout} style={styles.logoutBtn} />
-
         <Pressable style={styles.footerLink} onPress={() => {}}>
           <Text style={styles.footerText}>Privacy & Data Settings</Text>
         </Pressable>
@@ -137,8 +125,6 @@ const styles = StyleSheet.create({
   pillText: { color: colors.text, fontWeight: "900", fontSize: 12 },
 
   grid: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
-
-  logoutBtn: { backgroundColor: colors.primary },
 
   footerLink: { marginTop: spacing.md, alignItems: "center" },
   footerText: { color: colors.faint, fontWeight: "700" },

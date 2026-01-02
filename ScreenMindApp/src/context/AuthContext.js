@@ -41,12 +41,20 @@ export const AuthProvider = ({ children }) => {
     return userCredential.user;
   };
 
+  const updateName = async (newName) => {
+  if (!auth.currentUser) throw new Error("No user currently signed in.");
+  await updateProfile(auth.currentUser, { displayName: newName });
+  // refresh local user (optional)
+  setUser({ ...auth.currentUser });
+};
+
+
   const signOut = async () => {
     await firebaseSignOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ user, initializing, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, initializing, signUp, signIn, signOut, updateName  }}>
       {children}
     </AuthContext.Provider>
   );
