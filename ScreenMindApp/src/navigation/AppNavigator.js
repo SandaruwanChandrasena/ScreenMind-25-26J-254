@@ -40,7 +40,7 @@ export default function AppNavigator() {
           headerStyle: { backgroundColor: colors.bg1 },
           headerTintColor: colors.text,
           headerTitleStyle: { fontWeight: "900" },
-          headerShadowVisible: false, // cleaner look
+          headerShadowVisible: false,
         }}
       >
         {user ? (
@@ -56,11 +56,7 @@ export default function AppNavigator() {
                     style={{ marginRight: 16 }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Icon
-                      name="person-circle-outline"
-                      size={28}
-                      color={colors.text}
-                    />
+                    <Icon name="person-circle-outline" size={28} color={colors.text} />
                   </TouchableOpacity>
                 ),
               })}
@@ -74,16 +70,8 @@ export default function AppNavigator() {
           </>
         ) : (
           <>
-            <Stack.Screen
-              name="SignIn"
-              component={SignInScreen}
-              options={{ title: "Sign In" }}
-            />
-            <Stack.Screen
-              name="SignUp"
-              component={SignUpScreen}
-              options={{ title: "Sign Up" }}
-            />
+            <Stack.Screen name="SignIn" component={SignInScreen} options={{ title: "Sign In" }} />
+            <Stack.Screen name="SignUp" component={SignUpScreen} options={{ title: "Sign Up" }} />
           </>
         )}
       </Stack.Navigator>
