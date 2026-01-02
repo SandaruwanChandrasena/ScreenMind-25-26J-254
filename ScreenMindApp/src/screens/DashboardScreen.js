@@ -1,12 +1,13 @@
 import React, { useContext } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 
-import ScreenBackground from "../components/ScreenBackground";
-import FeatureCard from "../components/FeatureCard";
-import PrimaryButton from "../components/PrimaryButton";
+import { AuthContext } from "../context/AuthContext";
 import { colors } from "../theme/colors";
 import { spacing } from "../theme/spacing";
-import { AuthContext } from "../context/AuthContext";
+
+import DashboardBackground from "../components/DashboardBackground";
+import FeatureCard from "../components/FeatureCard";
+import PrimaryButton from "../components/PrimaryButton";
 
 export default function DashboardScreen() {
   const { user, signOut } = useContext(AuthContext);
@@ -19,19 +20,20 @@ export default function DashboardScreen() {
     }
   };
 
-  // Dummy scores for now (later we’ll replace with real ML outputs)
+  // Dummy summary (later replace with your ML predictions)
   const overallRisk = "Moderate";
   const overallHint = "Late-night usage increased this week.";
 
   return (
-    <ScreenBackground>
-      <ScrollView contentContainerStyle={styles.container}>
+    <DashboardBackground>
+      {/* ✅ Your layout stays the same — only background is new */}
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.brand}>SCREENMIND</Text>
 
         <Text style={styles.title}>Welcome, {user?.displayName || "User"} 👋</Text>
         <Text style={styles.sub}>Your calm dashboard for healthier screen habits.</Text>
 
-        {/* Top Summary Card */}
+        {/* Summary card (keep or remove — your choice) */}
         <View style={styles.summaryCard}>
           <View style={{ flex: 1 }}>
             <Text style={styles.summaryTitle}>Overall Risk</Text>
@@ -46,19 +48,19 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Feature Grid */}
+        {/* Cards (same as before) */}
         <View style={styles.grid}>
           <FeatureCard
             emoji="📱"
             title="Screen Usage"
-            subtitle="Analyze screen time & addiction risk patterns"
+            subtitle="Usage & addiction risk"
             tint="rgba(124,58,237,0.25)"
             onPress={() => {}}
           />
           <FeatureCard
             emoji="😴"
             title="Sleep"
-            subtitle="Estimate sleep disruption risk using phone activity"
+            subtitle="Sleep disruption analysis"
             tint="rgba(34,197,94,0.22)"
             onPress={() => {}}
           />
@@ -68,29 +70,30 @@ export default function DashboardScreen() {
           <FeatureCard
             emoji="💬"
             title="Social Media"
-            subtitle="Detect risky interaction and engagement patterns"
-            tint="rgba(59,130,246,0.22)"
+            subtitle="Interaction risk patterns"
+            tint="rgba(14,165,233,0.22)"
             onPress={() => {}}
           />
           <FeatureCard
             emoji="📍"
             title="Isolation"
-            subtitle="Mobility & communication-based loneliness risk"
+            subtitle="Mobility & loneliness risk"
             tint="rgba(239,68,68,0.18)"
             onPress={() => {}}
           />
         </View>
 
-        {/* Actions */}
+        {/* Logout (keep your style — this is a nice default) */}
         <View style={{ height: spacing.lg }} />
-
         <PrimaryButton title="Log Out" onPress={onLogout} style={styles.logoutBtn} />
 
-        <Pressable onPress={() => {}} style={({ pressed }) => [styles.footerLink, pressed && { opacity: 0.85 }]}>
+        <Pressable style={styles.footerLink} onPress={() => {}}>
           <Text style={styles.footerText}>Privacy & Data Settings</Text>
         </Pressable>
+
+        <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 
@@ -135,9 +138,7 @@ const styles = StyleSheet.create({
 
   grid: { flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
 
-  logoutBtn: {
-    backgroundColor: colors.primary,
-  },
+  logoutBtn: { backgroundColor: colors.primary },
 
   footerLink: { marginTop: spacing.md, alignItems: "center" },
   footerText: { color: colors.faint, fontWeight: "700" },
