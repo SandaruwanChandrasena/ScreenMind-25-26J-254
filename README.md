@@ -213,7 +213,71 @@ ScreenMind/
 └── README.md             # Documentation
 
 ```
+---
 
+## ▶️ How to Run the Project
+
+### 📌 Prerequisites
+
+Ensure the following software is installed on your system:
+
+* **Node.js** (v18+ recommended)
+* **npm** 
+* **Python** (v3.9+ recommended)
+* **Android Studio** (for Android emulator)
+* **Java JDK 17** (for Android builds)
+* **Firebase Project** (Authentication + Firestore enabled)
+
+---
+
+### 📱 1. Run the Mobile Application (ScreenMindApp)
+
+```bash
+cd ScreenMindApp
+npm install
+```
+
+Start the Metro bundler:
+
+```bash
+npm start
+```
+
+Run the Android app:
+
+```bash
+npm run android
+```
+
+> ⚠️ Ensure an Android emulator is running or a physical device is connected.
+
+---
+
+### 🌐 2. Run the Node.js Backend (backend-node)
+
+```bash
+cd backend-node
+npm install
+```
+
+Create a `.env` file:
+
+```env
+PORT=3000
+NODE_ENV=development
+```
+
+Start the backend server:
+
+```bash
+npm start
+```
+
+The backend will run at:
+
+```
+http://localhost:3000
+```
 ---
 
 ## 🔐 Privacy & Ethical Considerations
