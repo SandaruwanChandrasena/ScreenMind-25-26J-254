@@ -51,7 +51,7 @@ export default function IsolationOverviewScreen({ navigation }) {
 
           <PrimaryButton
             title="View Why This Risk"
-            onPress={() => navigation.navigate("IsolationWhy")}
+            onPress={() => navigation.navigate("IsolationTrends")}
           />
 
           <View style={{ height: spacing.sm }} />
@@ -81,7 +81,7 @@ export default function IsolationOverviewScreen({ navigation }) {
             style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.85 }]}
             onPress={() => navigation.navigate("IsolationTrends")}
           >
-            <Text style={styles.linkText}>📈 Trends</Text>
+            <Text style={styles.linkText}>📈 Stats</Text>
           </Pressable>
 
           <Pressable
