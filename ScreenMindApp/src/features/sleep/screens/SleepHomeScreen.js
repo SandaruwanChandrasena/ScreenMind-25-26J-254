@@ -155,17 +155,24 @@ export default function SleepHomeScreen({ navigation }) {
       return;
     }
 
+    // Test if module is loaded
+    console.log("✅ NotificationBridge module found");
+    NotificationBridge.testModule();
+
     const emitter = new NativeEventEmitter(NotificationBridge);
 
-    const sub = emitter.addListener("ScreenMindNotification", async (event) => {
+    const sub = emitter.addListener("SCREENMIND_NOTIFICATION", async (event) => {
       try {
-        // event expected: { packageName, title, postTime }
+        console.log("📱 Received notification event:", event);
+        
+        // event expected: { packageName, title, ts }
         const packageName = event?.packageName ?? null;
         const title = event?.title ?? null;
-        const ts = event?.postTime ?? Date.now();
+        const ts = event?.ts ?? Date.now();
 
         // If session isn't running, ignore OR you can store as sessionId=null
         if (!runningSessionId) {
+          console.log("⚠️ No running session, notification ignored");
           // If you want to keep all notifications even without session, uncomment:
           // await logNotificationEvent({ userId, sessionId: null, packageName, title, ts });
           return;
