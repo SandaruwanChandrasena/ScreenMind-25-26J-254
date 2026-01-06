@@ -85,7 +85,7 @@ export default function SMNotificationAnalysisScreen() {
 
         <SMSectionTitle
           title="Today Summary"
-          subtitle="Placeholders until the listener + backend are connected."
+          subtitle=""
         />
 
         {/* ✅ Premium Today Summary Container */}
@@ -117,13 +117,13 @@ export default function SMNotificationAnalysisScreen() {
               label="Negative"
               value="6"
               sub="Msgs detected"
-              tint="rgba(239,68,68,0.24)"
+              tint="rgba(233, 12, 12, 0.24)"
             />
             <SMMiniCard
               label="Positive"
               value="3"
               sub="Msgs detected"
-              tint="rgba(34,197,94,0.24)"
+              tint="rgba(10, 235, 92, 0.24)"
             />
           </View>
 
@@ -134,13 +134,13 @@ export default function SMNotificationAnalysisScreen() {
               label="Absolutist"
               value="2"
               sub="Markers seen"
-              tint="rgba(124,58,237,0.26)"
+              tint="rgba(109, 30, 247, 0.26)"
             />
             <SMMiniCard
               label="Masking"
               value="No"
               sub="Emoji conflict"
-              tint="rgba(14,165,233,0.24)"
+              tint="rgba(6, 173, 250, 0.33)"
             />
           </View>
         </View>
