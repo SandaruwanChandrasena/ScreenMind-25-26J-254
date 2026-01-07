@@ -10,7 +10,7 @@ class UnlockReceiver : BroadcastReceiver() {
     if (intent.action == Intent.ACTION_USER_PRESENT) {
       val prefs: SharedPreferences = context.getSharedPreferences("isolation_metrics", Context.MODE_PRIVATE)
       val today = DateKey.today()
-      val key = "unlocks_$today"
+      val key = "unlock_$today"
       val current = prefs.getInt(key, 0)
       prefs.edit().putInt(key, current + 1).apply()
     }

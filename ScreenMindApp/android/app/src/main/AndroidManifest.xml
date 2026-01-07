@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  xmlns:tools="http://schemas.android.com/tools">
 
   <!-- Location -->
   <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
@@ -15,6 +16,15 @@
   <!-- Bluetooth (Android 12+) -->
   <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+  <!-- Usage Stats (for screen time & app usage) -->
+  <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
+    tools:ignore="ProtectedPermissions" />
+
+  <!-- Communication metadata (optional) -->
+  <uses-permission android:name="android.permission.READ_CALL_LOG" />
+  <uses-permission android:name="android.permission.READ_SMS" />
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
   <!-- Internet -->
   <uses-permission android:name="android.permission.INTERNET" />

@@ -1,16 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { RESULTS } from "react-native-permissions";
 
 import ScreenBackground from "../../../components/ScreenBackground";
+import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
+import GaugeRing from "../components/GaugeRing";
 
 // ✅ NEW: storage + scoring + collector
 import { getIsolationPrefs, upsertDailyIsolationRecord } from "../services/isolationStorage";
 import { computeIsolationRisk } from "../services/isolationScoring";
-import { generateDummyFeatures } from "../services/isolationCollector";
+import { collectRealFeatures } from "../services/isolationCollector";
+import { checkAllPermissions } from "../services/permissionHelper";
 
 // ---------- Helpers ----------
 function formatMinutes(min) {
@@ -54,41 +58,49 @@ export default function IsolationOverviewScreen({ navigation }) {
   const [prefs, setPrefs] = useState(null);
   const [features, setFeatures] = useState(null);
   const [risk, setRisk] = useState({ score: 0, label: "Low", breakdown: {} });
+  const [hasPermissions, setHasPermissions] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      try {
-        // 1) Load consent toggles
-        const p = await getIsolationPrefs();
-        setPrefs(p);
-
-        // 2) Collect features (dummy for now)
-        // ✅ EDIT LATER (IMPORTANT): Replace this with real sensor feature extraction
-        const f = generateDummyFeatures();
-
-        // 3) Compute risk score
-        const r = computeIsolationRisk(f, p);
-
-        // 4) Save today record (used by Stats/Trends screens)
-        const record = {
-          date: todayISO(),
-          features: f,
-          riskScore: r.score,
-          riskLabel: r.label,
-          breakdown: r.breakdown,
-        };
-        await upsertDailyIsolationRecord(record);
-
-        // 5) Update UI state
-        setFeatures(f);
-        setRisk(r);
-      } catch (e) {
-        console.log("IsolationOverview init error:", e);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    loadData();
   }, []);
+
+  const loadData = async () => {
+    try {
+      // 1) Check permissions
+      const perms = await checkAllPermissions();
+      const hasLocation = perms.location === RESULTS.GRANTED && perms.backgroundLocation === RESULTS.GRANTED;
+      setHasPermissions(hasLocation);
+
+      // 2) Load consent toggles
+      const p = await getIsolationPrefs();
+      setPrefs(p);
+
+      // 3) Collect features (real data from sensors)
+      // ✅ Now using real sensor data instead of dummy
+      const f = await collectRealFeatures();
+
+      // 4) Compute risk score
+      const r = computeIsolationRisk(f, p);
+
+      // 5) Save today record (used by Stats/Trends screens)
+      const record = {
+        date: todayISO(),
+        features: f,
+        riskScore: r.score,
+        riskLabel: r.label,
+        breakdown: r.breakdown,
+      };
+      await upsertDailyIsolationRecord(record);
+
+      // 6) Update UI state
+      setFeatures(f);
+      setRisk(r);
+    } catch (e) {
+      console.log("IsolationOverview init error:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Build highlight cards based on features + prefs
   const highlights = useMemo(() => {
@@ -145,12 +157,62 @@ export default function IsolationOverviewScreen({ navigation }) {
         <Text style={styles.title}>📍 Social Well-being</Text>
         <Text style={styles.sub}>Loneliness risk based on mobility + communication + behaviour.</Text>
 
+        {/* Permission Warning */}
+        {!hasPermissions && (
+          <GlassCard
+            icon="warning-outline"
+            title="⚠️ Permissions Required"
+            subtitle="Grant permissions to enable tracking"
+            style={{ marginTop: spacing.lg, backgroundColor: "rgba(255, 200, 0, 0.1)" }}
+          >
+            <Text style={styles.body}>
+              Location permissions are required to track mobility patterns. Without permissions, only limited features will be available.
+            </Text>
+
+            <View style={{ height: spacing.md }} />
+
+            <PrimaryButton 
+              title="Go to Privacy Settings" 
+              onPress={() => navigation.navigate("IsolationPrivacy")}
+            />
+          </GlassCard>
+        )}
+
         <GlassCard
           icon="alert-circle-outline"
           title={`Risk: ${risk.label}`}
           subtitle={`${risk.score}/100 • Last 7 days`}
           style={{ marginTop: spacing.lg }}
         >
+          {/* Donut/Gauge Ring Visualization */}
+          <GaugeRing score={risk.score} label={risk.label} size={200} />
+
+          {/* Risk Scale Legend */}
+          <View style={styles.riskLegend}>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: "#10b981" }]} />
+                <Text style={styles.legendText}>0-25: Low</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: "#f59e0b" }]} />
+                <Text style={styles.legendText}>25-50: Moderate</Text>
+              </View>
+            </View>
+            <View style={styles.legendRow}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: "#f87171" }]} />
+                <Text style={styles.legendText}>50-75: High</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendColor, { backgroundColor: "#dc2626" }]} />
+                <Text style={styles.legendText}>75-100: Very High</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={{ height: spacing.md }} />
+
           <Text style={styles.body}>{summary}</Text>
 
           <View style={{ height: spacing.md }} />
@@ -220,4 +282,36 @@ const styles = StyleSheet.create({
 
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg },
   loadingText: { marginTop: spacing.md, color: colors.muted, fontWeight: "700" },
+
+  riskLegend: {
+    marginVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  legendRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  legendItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: spacing.sm,
+  },
+  legendColor: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: spacing.sm,
+  },
+  legendText: {
+    color: colors.text,
+    fontWeight: "700",
+    fontSize: 11,
+  },
 });

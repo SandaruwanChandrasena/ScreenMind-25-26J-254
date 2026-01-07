@@ -200,6 +200,16 @@ export default function IsolationStatsScreen({ navigation }) {
             <Text style={styles.linkText}>See Suggestions</Text>
             <Icon name="chevron-forward" size={16} color={colors.text} />
           </Pressable>
+
+          <View style={{ height: spacing.sm }} />
+
+          <Pressable
+            onPress={() => navigation.navigate("IsolationPrivacy")}
+            style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.linkText}>Privacy & Data Controls</Text>
+            <Icon name="chevron-forward" size={16} color={colors.text} />
+          </Pressable>
         </GlassCard>
 
         <View style={{ height: spacing.xxl }} />
