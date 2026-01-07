@@ -77,7 +77,7 @@ export default function DashboardScreen({ navigation }) {
 
         </View>
 
-        <Pressable style={styles.footerLink} onPress={() => {}}>
+        <Pressable style={styles.footerLink} onPress={() => navigation.navigate("IsolationPrivacy")}>
           <Text style={styles.footerText}>Privacy & Data Settings</Text>
         </Pressable>
 
