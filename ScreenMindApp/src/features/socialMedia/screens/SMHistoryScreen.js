@@ -30,7 +30,7 @@ export default function SMHistoryScreen() {
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.brand}>HISTORY</Text>
         <Text style={styles.title}>Risk Timeline</Text>
-        <Text style={styles.sub}>Daily summary of Component 04 risk outputs.</Text>
+        <Text style={styles.sub}>Daily summary outputs.</Text>
 
         <SMSectionTitle title="Recent days" subtitle="Placeholder timeline until DB integration is done." />
 

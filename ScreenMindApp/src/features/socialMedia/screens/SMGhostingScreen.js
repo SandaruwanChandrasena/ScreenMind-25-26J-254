@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
 import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
@@ -6,159 +6,169 @@ import { spacing } from "../../../theme/spacing";
 import SMSectionTitle from "../components/SMSectionTitle";
 import SMMiniCard from "../components/SMMiniCard";
 import { formatMinutes } from "../utils/sm.formatters";
-import Slider from "@react-native-community/slider"; // ✅ add this package if not installed
 
 export default function SMGhostingScreen() {
-  // ✅ placeholder stats (later replace with backend)
-  const avgLatencyMin = 95;
-  const maxLatencyMin = 360;
+  /* ---------------- MOCK BEHAVIOUR DATA ---------------- */
+  const avgReplyMin = 160;       // average reply time
+  const maxReplyMin = 540;       // longest delay today
+  const recentReplyMin = 210;    // recent replies
+  const lateReplies = 5;
+  const totalReplies = 12;
+  const repliesToday = 6;
+  const usualReplies = 14;
+  const unanswered = 3;
+  const lowActivityDays = 3;
 
-  // ✅ user-adjustable definition of “late reply”
-  const [lateThresholdHours, setLateThresholdHours] = useState(6);
-  const lateThresholdMin = Math.round(lateThresholdHours * 60);
+  const latencyTrendUp = true;
+  const engagementDown = repliesToday < usualReplies;
 
-  // ✅ mock weekly latency trend (minutes)
-  const weeklyAvg = [70, 85, 120, 95, 160, 110, 95];
+  /* ---------------- DERIVED VALUES ---------------- */
+  const latePercent = Math.round((lateReplies / totalReplies) * 100);
 
-  // ✅ late replies count (placeholder)
-  const lateReplies = useMemo(() => {
-    // if you had real per-reply latency, you'd count those > threshold
-    // for now: derive a simple number from avg/max/threshold so UI behaves
-    if (maxLatencyMin < lateThresholdMin) return 0;
-    if (avgLatencyMin < lateThresholdMin) return 2;
-    return 4;
-  }, [avgLatencyMin, maxLatencyMin, lateThresholdMin]);
+  const riskScore =
+    (avgReplyMin > 120 ? 1 : 0) +
+    (latePercent > 35 ? 1 : 0) +
+    (engagementDown ? 1 : 0) +
+    (lowActivityDays >= 3 ? 1 : 0);
 
-  // ✅ derive risk level from values
-  const risk = useMemo(() => {
-    // "High" if very slow + many late replies
-    if (avgLatencyMin >= 240 || lateReplies >= 5 || maxLatencyMin >= 720) return "HIGH";
-    // "Moderate" if often slow
-    if (avgLatencyMin >= 90 || lateReplies >= 2 || maxLatencyMin >= 360) return "MODERATE";
-    return "LOW";
-  }, [avgLatencyMin, lateReplies, maxLatencyMin]);
+  const riskLevel =
+    riskScore >= 3 ? "HIGH" : riskScore === 2 ? "MODERATE" : "LOW";
 
-  const riskUI = useMemo(() => {
-    const map = {
-      LOW: {
-        bg: "rgba(34,197,94,0.14)",
-        text: "#22C55E",
-        label: "Low withdrawal risk today.",
-        tint: "rgba(34,197,94,0.18)",
-      },
-      MODERATE: {
-        bg: "rgba(255,184,0,0.14)",
-        text: "#FFB800",
-        label: "Moderate withdrawal signals detected.",
-        tint: "rgba(255,184,0,0.18)",
-      },
-      HIGH: {
-        bg: "rgba(239,68,68,0.14)",
-        text: "#EF4444",
-        label: "High withdrawal risk — consistent delayed replies.",
-        tint: "rgba(239,68,68,0.18)",
-      },
-    };
-    return map[risk];
-  }, [risk]);
-
-  // ✅ mini bar chart (no library)
-  const maxTrend = Math.max(...weeklyAvg, 1);
+  const riskUI = {
+    LOW: {
+      label: "Low",
+      color: "#22C55E",
+      bg: "rgba(34,197,94,0.14)",
+      message: "Interaction behaviour appears stable.",
+    },
+    MODERATE: {
+      label: "Moderate",
+      color: "#FFB800",
+      bg: "rgba(255,184,0,0.14)",
+      message: "Reply delays or reduced interaction detected.",
+    },
+    HIGH: {
+      label: "High",
+      color: "#EF4444",
+      bg: "rgba(239,68,68,0.14)",
+      message: "Sustained avoidance patterns detected.",
+    },
+  }[riskLevel];
 
   return (
     <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.brand}>GHOSTING DETECTOR</Text>
-        <Text style={styles.title}>Response Latency</Text>
+        <Text style={styles.title}>Reply & Interaction Behaviour</Text>
         <Text style={styles.sub}>
-          Measures delay between receiving a message and opening the app to respond.
+          Analyses response timing and interaction patterns without reading message content.
         </Text>
 
-        {/* ✅ Risk banner */}
-        <View style={[styles.banner, { backgroundColor: riskUI.bg }]}>
-          <Text style={[styles.bannerText, { color: riskUI.text }]}>{riskUI.label}</Text>
+        {/* -------- STATUS CARD -------- */}
+        <View style={[styles.statusCard, { backgroundColor: riskUI.bg }]}>
+          <Text style={styles.statusTitle}>Social Withdrawal Risk</Text>
+          <Text style={[styles.statusLevel, { color: riskUI.color }]}>
+            {riskUI.label}
+          </Text>
+          <Text style={styles.statusMsg}>{riskUI.message}</Text>
         </View>
 
-        <SMSectionTitle title="Latency Metrics" subtitle="Placeholders until usage tracking is connected." />
+        {/* -------- RESPONSE LATENCY -------- */}
+        <SMSectionTitle title="Response Latency" subtitle="Timing-based interaction signals." />
 
         <View style={styles.row}>
           <SMMiniCard
-            label="Average"
-            value={formatMinutes(avgLatencyMin)}
+            label="Average reply"
+            value={formatMinutes(avgReplyMin)}
             sub="Today"
-            tint="rgba(0,221,187,0.16)"
+            tint="rgba(59,130,246,0.18)"
           />
           <SMMiniCard
-            label="Maximum"
-            value={formatMinutes(maxLatencyMin)}
+            label="Longest delay"
+            value={formatMinutes(maxReplyMin)}
             sub="Today"
-            tint="rgba(59,130,246,0.16)"
+            tint="rgba(239,68,68,0.18)"
           />
         </View>
 
-        <View style={{ height: spacing.md }} />
+        <View style={styles.infoRow}>
+          <Text style={styles.infoText}>
+            Response time is {latencyTrendUp ? "increasing ⬆️" : "stable"} this week.
+          </Text>
+        </View>
+
+        {/* -------- LATE REPLIES -------- */}
+        <SMSectionTitle title="Late Replies" subtitle="Replies exceeding your usual response time." />
 
         <View style={styles.row}>
           <SMMiniCard
             label="Late replies"
             value={lateReplies.toString()}
-            sub={`> ${lateThresholdHours.toFixed(0)} hours`}
-            tint="rgba(123,77,255,0.16)"
+            sub="Today"
+            tint="rgba(123,77,255,0.20)"
           />
           <SMMiniCard
-            label="Status"
-            value={risk === "LOW" ? "Low" : risk === "MODERATE" ? "Moderate" : "High"}
-            sub="Withdrawal risk"
-            tint={riskUI.tint}
+            label="Delayed"
+            value={`${latePercent}%`}
+            sub="Of replies"
+            tint="rgba(14,165,233,0.20)"
           />
         </View>
 
-        <SMSectionTitle title="Late Reply Threshold" subtitle="Adjust what counts as a late response." />
+        <Text style={styles.note}>
+          Late = replies longer than your typical response time.
+        </Text>
 
-        <View style={styles.sliderCard}>
-          <View style={styles.sliderTop}>
-            <Text style={styles.sliderLabel}>Threshold</Text>
-            <View style={[styles.pill, { backgroundColor: "rgba(255,255,255,0.06)" }]}>
-              <Text style={styles.pillText}>{lateThresholdHours.toFixed(0)}h</Text>
-            </View>
-          </View>
+        {/* -------- ENGAGEMENT -------- */}
+        <SMSectionTitle title="Engagement Level" subtitle="Reply frequency compared to your baseline." />
 
-          <Slider
-            value={lateThresholdHours}
-            minimumValue={1}
-            maximumValue={12}
-            step={1}
-            onValueChange={setLateThresholdHours}
-            minimumTrackTintColor={riskUI.text}
-            maximumTrackTintColor={"rgba(255,255,255,0.12)"}
-            thumbTintColor={riskUI.text}
+        <View style={styles.row}>
+          <SMMiniCard
+            label="Replies today"
+            value={repliesToday.toString()}
+            sub={`Usual: ${usualReplies}`}
+            tint="rgba(34,197,94,0.18)"
           />
-
-          <Text style={styles.sliderHint}>
-            Replies slower than this may indicate avoidance or social withdrawal.
-          </Text>
+          <SMMiniCard
+            label="Low activity"
+            value={`${lowActivityDays} days`}
+            sub="In a row"
+            tint="rgba(255,184,0,0.18)"
+          />
         </View>
 
-        <SMSectionTitle title="7-Day Trend" subtitle="Average daily response time (mock trend)." />
+        {/* -------- UNANSWERED -------- */}
+        <SMSectionTitle title="Unanswered Messages" subtitle="Messages not replied to yet." />
 
-        <View style={styles.trendCard}>
-          <View style={styles.trendBars}>
-            {weeklyAvg.map((v, i) => {
-              const h = Math.max(6, Math.round((v / maxTrend) * 56));
-              return <View key={i} style={[styles.bar, { height: h }]} />;
-            })}
-          </View>
-          <Text style={styles.trendHint}>
-            A rising trend across multiple days increases withdrawal risk.
-          </Text>
+        <View style={styles.row}>
+          <SMMiniCard
+            label="Unanswered"
+            value={unanswered.toString()}
+            sub="Today"
+            tint="rgba(239,68,68,0.18)"
+          />
         </View>
 
-        <SMSectionTitle title="Interpretation" subtitle="How this affects your overall score." />
+        <Text style={styles.note}>
+          Some messages have not received a reply yet.
+        </Text>
+
+        {/* -------- INSIGHTS -------- */}
+        <SMSectionTitle title="Insights" subtitle="Behavioural patterns observed." />
 
         <View style={styles.card}>
           <Text style={styles.cardText}>
-            If response latency stays above your threshold for multiple days, the system can flag a higher
-            social withdrawal risk and increase the overall risk score.
+            • You are taking longer to reply than usual.{"\n"}
+            • Interaction frequency has decreased recently.{"\n"}
+            • These patterns may indicate social withdrawal or overload.
+          </Text>
+        </View>
+
+        {/* -------- ETHICS FOOTER -------- */}
+        <View style={styles.ethics}>
+          <Text style={styles.ethicsText}>
+            This analysis is based only on response timing and frequency. Message content,
+            recipients, and identities are never accessed.
           </Text>
         </View>
 
@@ -168,66 +178,35 @@ export default function SMGhostingScreen() {
   );
 }
 
+/* ---------------- STYLES ---------------- */
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingTop: spacing.xxl, flexGrow: 1 },
   brand: { color: colors.muted, fontWeight: "900", letterSpacing: 2.5 },
   title: { color: colors.text, fontSize: 24, fontWeight: "900", marginTop: spacing.sm },
   sub: { color: colors.muted, marginTop: spacing.xs, marginBottom: spacing.md, lineHeight: 18 },
 
+  statusCard: {
+    borderRadius: 18,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    marginBottom: spacing.lg,
+  },
+  statusTitle: { color: colors.muted, fontWeight: "800", fontSize: 12 },
+  statusLevel: { fontSize: 22, fontWeight: "900", marginTop: 6 },
+  statusMsg: { color: colors.text, marginTop: 6, fontSize: 13 },
+
   row: { flexDirection: "row", gap: spacing.md },
 
-  banner: {
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
+  infoRow: { marginTop: spacing.sm },
+  infoText: { color: colors.faint, fontSize: 12 },
+
+  note: {
+    color: colors.faint,
+    fontSize: 12,
+    marginTop: spacing.xs,
     marginBottom: spacing.md,
   },
-  bannerText: { fontWeight: "900", fontSize: 12, letterSpacing: 0.2 },
-
-  sliderCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: spacing.md,
-  },
-  sliderTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sliderLabel: { color: colors.text, fontWeight: "900", fontSize: 13 },
-  sliderHint: { color: colors.muted, marginTop: spacing.sm, fontSize: 12, lineHeight: 16 },
-
-  pill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-  },
-  pillText: { color: colors.text, fontWeight: "900", fontSize: 12 },
-
-  trendCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: spacing.md,
-  },
-  trendBars: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    height: 64,
-    marginTop: 4,
-  },
-  bar: {
-    width: 16,
-    borderRadius: 8,
-    backgroundColor: "rgba(255,255,255,0.14)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-  },
-  trendHint: { color: colors.muted, marginTop: spacing.sm, fontSize: 12, lineHeight: 16 },
 
   card: {
     backgroundColor: colors.card,
@@ -237,4 +216,12 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   cardText: { color: colors.muted, lineHeight: 20 },
+
+  ethics: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.10)",
+  },
+  ethicsText: { color: colors.faint, fontSize: 11, lineHeight: 16 },
 });
