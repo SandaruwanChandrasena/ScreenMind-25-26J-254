@@ -12,6 +12,7 @@ import com.screenmindapp.isolation.UsageStatsPackage
 import com.screenmindapp.isolation.ServiceStarterPackage
 import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage   // ✅ NEW
+import com.screenmindapp.isolation.CommunicationStatsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -26,6 +27,7 @@ class MainApplication : Application(), ReactApplication {
           add(ServiceStarterPackage())
           add(IsolationMetricsPackage())
           add(BehaviourMetricsPackage()) // ✅ NEW
+          add(CommunicationStatsPackage())
 
           // Packages that cannot be autolinked yet can be added manually here
           // add(MyReactNativePackage())
