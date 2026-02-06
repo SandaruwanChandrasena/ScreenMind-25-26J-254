@@ -33,10 +33,10 @@ export default function IsolationSuggestionsScreen({ navigation }) {
 
         <View style={{ height: spacing.lg }} />
 
-        <Pressable style={styles.bigBtn} onPress={() => navigation.navigate("IsolationPrivacy")}>
+        {/* <Pressable style={styles.bigBtn} onPress={() => navigation.navigate("IsolationPrivacy")}>
           <Text style={styles.bigBtnText}>Privacy & Data Controls</Text>
           <Icon name="chevron-forward" size={18} color={colors.text} />
-        </Pressable>
+        </Pressable> */}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
