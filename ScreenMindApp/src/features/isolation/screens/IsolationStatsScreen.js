@@ -11,19 +11,16 @@ import SegmentedControl from "../components/SegmentedControl";
 import MiniBarChart from "../components/MiniBarChart";
 import YearInPixels from "../components/YearInPixels";
 
-// ✅ Load history from AsyncStorage
+// ✅ NEW: Load history from AsyncStorage
 import { getDailyIsolationHistory } from "../services/isolationStorage";
 
 export default function IsolationStatsScreen({ navigation }) {
   const [range, setRange] = useState("Week"); // Week | Month | Year
 
-  // ✅ History state
+  // ✅ NEW: History state (requested)
   const [history, setHistory] = useState([]);
 
-  // ✅ NEW: Social/Withdraw toggle state
-  const [mode, setMode] = useState("Social"); // Social | Withdraw
-
-  // ✅ Load from storage
+  // ✅ NEW: Load from storage (requested)
   useEffect(() => {
     (async () => {
       const h = await getDailyIsolationHistory();
@@ -31,18 +28,27 @@ export default function IsolationStatsScreen({ navigation }) {
     })();
   }, []);
 
-  // ---------- Build real chart arrays + Social/Withdraw lists ----------
+  // ---------- Build real chart arrays ----------
   const ui = useMemo(() => {
-    // history is saved as newest-first
+    // history is saved as newest-first (we inserted with unshift)
     const sortedOldestFirst = [...history].reverse();
+
+    // Extract scores
     const scores = sortedOldestFirst.map((r) => Number(r.riskScore || 0));
 
+    // Week = last 7 scores
     const weekRisk = scores.slice(-7);
+
+    // Month = last 30 scores
     const monthRisk = scores.slice(-30);
+
+    // Year pixels (365)
+    // We map each day score -> 0..4 (Low..Severe)
     const yearScores = scores.slice(-365);
+
     const yearPixels = yearScores.map((s) => scoreToPixelLevel(s));
 
-    // Fallback demo data (UI safe)
+    // If no data, fallback (so UI doesn’t break)
     const fallbackWeek = [42, 45, 48, 58, 62, 59, 60];
     const fallbackMonth = Array.from({ length: 30 }, (_, i) => 35 + Math.round(25 * Math.abs(Math.sin(i / 6))));
     const fallbackYear = Array.from({ length: 365 }, (_, i) => {
@@ -55,37 +61,23 @@ export default function IsolationStatsScreen({ navigation }) {
       return 4;
     });
 
-    // ✅ EDIT LATER: replace with REAL computed contributions
-    // These are "what increased exposure" vs "what reduced exposure"
-    const socialItems = [
-      { label: "campus", pct: 28 },
-      { label: "walking", pct: 22 },
-      { label: "friends", pct: 18 },
-      { label: "work", pct: 14 },
-      { label: "staying home", pct: 18 },
-    ];
-
-    const withdrawItems = [
-      { label: "low mobility days", pct: 30 },
-      { label: "high time at home", pct: 24 },
-      { label: "few calls/SMS", pct: 18 },
-      { label: "low Bluetooth exposure", pct: 16 },
-      { label: "late-night usage", pct: 12 },
-    ];
-
     return {
       weekRisk: weekRisk.length ? weekRisk : fallbackWeek,
       monthRisk: monthRisk.length ? monthRisk : fallbackMonth,
       yearPixels: yearPixels.length ? yearPixels : fallbackYear,
-      socialItems,
-      withdrawItems,
+
+      // ✅ keep your socialWithdraw dummy list for now
+      socialWithdraw: [
+        { label: "campus", pct: 28 },
+        { label: "walking", pct: 22 },
+        { label: "friends", pct: 18 },
+        { label: "work", pct: 14 },
+        { label: "staying home", pct: 18 },
+      ],
     };
   }, [history]);
 
   const chartData = range === "Week" ? ui.weekRisk : ui.monthRisk;
-
-  // ✅ NEW: list switches based on selected tab
-  const listData = mode === "Social" ? ui.socialItems : ui.withdrawItems;
 
   return (
     <ScreenBackground>
@@ -95,9 +87,7 @@ export default function IsolationStatsScreen({ navigation }) {
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Icon name="chevron-back" size={22} color={colors.text} />
           </Pressable>
-
           <Text style={styles.title}>Stats</Text>
-
           <View style={styles.headerIcon}>
             <Icon name="stats-chart" size={18} color={colors.text} />
           </View>
@@ -129,6 +119,7 @@ export default function IsolationStatsScreen({ navigation }) {
             <Icon name="chevron-forward" size={16} color={colors.text} />
           </Pressable>
 
+          {/* Optional: show how many records you have */}
           <View style={{ height: spacing.sm }} />
           <Text style={styles.smallMeta}>
             Records loaded: {history.length} {history.length === 0 ? "(showing demo data)" : ""}
@@ -142,48 +133,27 @@ export default function IsolationStatsScreen({ navigation }) {
           subtitle="Activities that influenced your exposure"
           style={{ marginTop: spacing.md }}
         >
-          {/* ✅ FIXED: Tabs now work */}
           <View style={styles.jdWrap}>
-            <Pressable
-              onPress={() => setMode("Social")}
-              style={({ pressed }) => [
-                styles.jdBtn,
-                mode === "Social" && styles.jdBtnActive,
-                pressed && { opacity: 0.92 },
-              ]}
-            >
-              <Text style={[styles.jdText, mode === "Social" && styles.jdTextActive]}>Social</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => setMode("Withdraw")}
-              style={({ pressed }) => [
-                styles.jdBtn,
-                mode === "Withdraw" && styles.jdBtnActive,
-                pressed && { opacity: 0.92 },
-              ]}
-            >
-              <Text style={[styles.jdText, mode === "Withdraw" && styles.jdTextActive]}>Withdraw</Text>
-            </Pressable>
+            <View style={[styles.jdBtn, styles.jdBtnActive]}>
+              <Text style={[styles.jdText, styles.jdTextActive]}>Social</Text>
+            </View>
+            <View style={styles.jdBtn}>
+              <Text style={styles.jdText}>Withdraw</Text>
+            </View>
           </View>
 
           <View style={{ height: spacing.sm }} />
 
           <FlatList
-            data={listData}
+            data={ui.socialWithdraw}
             keyExtractor={(item) => item.label}
             scrollEnabled={false}
             renderItem={({ item, index }) => (
               <View style={[styles.rowItem, index !== 0 && styles.borderTop]}>
                 <View style={styles.rowLeft}>
-                  <Icon
-                    name={mode === "Social" ? "checkmark-circle-outline" : "remove-circle-outline"}
-                    size={16}
-                    color={colors.muted}
-                  />
+                  <Icon name="checkmark-circle-outline" size={16} color={colors.muted} />
                   <Text style={styles.rowText}>{item.label}</Text>
                 </View>
-
                 <View style={styles.pctPill}>
                   <Text style={styles.pctText}>{item.pct}%</Text>
                 </View>
@@ -218,6 +188,7 @@ export default function IsolationStatsScreen({ navigation }) {
           </View>
 
           <View style={{ height: spacing.md }} />
+
           <YearInPixels values={ui.yearPixels} />
 
           <View style={{ height: spacing.md }} />
@@ -227,16 +198,6 @@ export default function IsolationStatsScreen({ navigation }) {
             style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
           >
             <Text style={styles.linkText}>See Suggestions</Text>
-            <Icon name="chevron-forward" size={16} color={colors.text} />
-          </Pressable>
-
-          <View style={{ height: spacing.sm }} />
-
-          <Pressable
-            onPress={() => navigation.navigate("IsolationPrivacy")}
-            style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.linkText}>Privacy & Data Controls</Text>
             <Icon name="chevron-forward" size={16} color={colors.text} />
           </Pressable>
         </GlassCard>
@@ -253,6 +214,7 @@ function avg(arr) {
   return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
 }
 
+// Score 0..100 → pixel level 0..4
 function scoreToPixelLevel(score) {
   const s = Number(score || 0);
   if (s < 20) return 0;

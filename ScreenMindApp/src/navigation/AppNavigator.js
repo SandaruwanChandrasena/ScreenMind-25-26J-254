@@ -13,14 +13,14 @@ import ProfileScreen from "../screens/ProfileScreen";
 
 import { colors } from "../theme/colors";
 
-/* ✅ Isolation screens (ONLY ONCE — no duplicates) */
+/* ✅ Isolation screens */
 import IsolationOverviewScreen from "../features/isolation/screens/IsolationOverviewScreen";
 import IsolationWhyScreen from "../features/isolation/screens/IsolationWhyScreen";
 import IsolationInsightsScreen from "../features/isolation/screens/IsolationInsightsScreen";
 import IsolationTrendsScreen from "../features/isolation/screens/IsolationTrendsScreen";
 import IsolationSuggestionsScreen from "../features/isolation/screens/IsolationSuggestionsScreen";
 
-/* ✅ NEW: Stats-style UI + detail screens */
+/* ✅ Isolation extra/detail screens */
 import IsolationStatsScreen from "../features/isolation/screens/IsolationStatsScreen";
 import MobilityInsightsScreen from "../features/isolation/screens/MobilityInsightsScreen";
 import SocialInteractionScreen from "../features/isolation/screens/SocialInteractionScreen";

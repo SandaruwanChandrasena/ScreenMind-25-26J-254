@@ -1,38 +1,71 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const KEY_PREFS = "isolation_prefs_v1";
-const KEY_DAILY = "isolation_daily_v1";
+const STORAGE_KEY = '@screenmind_isolation_history';
 
-export async function getIsolationPrefs() {
-  const raw = await AsyncStorage.getItem(KEY_PREFS);
-  return raw
-    ? JSON.parse(raw)
-    : {
-        gps: true,
-        calls: true,
-        sms: false,
-        usage: true,
-        bluetooth: false,
-        wifi: false,
-      };
+/**
+ * Save daily isolation data
+ * @param {Object} data - { date: 'YYYY-MM-DD', score: number, risk: string, ... }
+ */
+export async function saveDailyIsolation(data) {
+  try {
+    const history = await getDailyIsolationHistory();
+    const dateKey = data.date || new Date().toISOString().split('T')[0];
+    
+    // Update or add entry for this date
+    const updated = [...history.filter(item => item.date !== dateKey), data];
+    
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    return updated;
+  } catch (error) {
+    console.error('Error saving daily isolation:', error);
+    return [];
+  }
 }
 
-export async function saveIsolationPrefs(prefs) {
-  await AsyncStorage.setItem(KEY_PREFS, JSON.stringify(prefs));
-}
-
+/**
+ * Get all daily isolation history
+ * @returns {Array} Array of daily isolation records
+ */
 export async function getDailyIsolationHistory() {
-  const raw = await AsyncStorage.getItem(KEY_DAILY);
-  return raw ? JSON.parse(raw) : [];
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error('Error getting isolation history:', error);
+    return [];
+  }
 }
 
-export async function upsertDailyIsolationRecord(record) {
-  const history = await getDailyIsolationHistory();
-  const idx = history.findIndex((r) => r.date === record.date);
+/**
+ * Get isolation data for a specific date range
+ * @param {number} days - Number of days to retrieve (e.g., 7 for week, 30 for month)
+ * @returns {Array} Filtered array of daily isolation records
+ */
+export async function getIsolationHistoryByRange(days) {
+  try {
+    const history = await getDailyIsolationHistory();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return history.filter(item => {
+      const itemDate = new Date(item.date);
+      return itemDate >= cutoffDate;
+    }).sort((a, b) => new Date(a.date) - new Date(b.date));
+  } catch (error) {
+    console.error('Error getting isolation history by range:', error);
+    return [];
+  }
+}
 
-  if (idx >= 0) history[idx] = record;
-  else history.unshift(record);
-
-  await AsyncStorage.setItem(KEY_DAILY, JSON.stringify(history));
-  return history;
+/**
+ * Clear all isolation history
+ */
+export async function clearIsolationHistory() {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    return true;
+  } catch (error) {
+    console.error('Error clearing isolation history:', error);
+    return false;
+  }
 }
