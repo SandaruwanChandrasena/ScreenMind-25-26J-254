@@ -71,11 +71,13 @@ export default function DashboardScreen({ navigation }) {
             title="Isolation"
             subtitle="Mobility & loneliness risk"
             tint="rgba(239,68,68,0.18)"
-            onPress={() => {}}
+            onPress={() => navigation.navigate("IsolationOverview")} // ✅ EDIT HERE
           />
+
+
         </View>
 
-        <Pressable style={styles.footerLink} onPress={() => {}}>
+        <Pressable style={styles.footerLink} onPress={() => navigation.navigate("IsolationPrivacy")}>
           <Text style={styles.footerText}>Privacy & Data Settings</Text>
         </Pressable>
 
