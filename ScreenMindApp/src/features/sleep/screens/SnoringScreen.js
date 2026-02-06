@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
@@ -77,7 +77,7 @@ export default function SnoringScreen() {
   const bars = [1,2,1,4,6,3,2,7,5,3,2,1,4,6,8,5,3,2,1,2,4,3,2,1];
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Snoring Report</Text>
         <Text style={styles.sub}>Optional feature • On-device processing • No audio stored.</Text>
@@ -150,7 +150,7 @@ export default function SnoringScreen() {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

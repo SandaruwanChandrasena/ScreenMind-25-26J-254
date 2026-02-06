@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert } from "react-native";
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 
@@ -199,7 +199,7 @@ export default function SleepDetailsScreen({ route }) {
   }, [summary]);
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Sleep Details</Text>
         <Text style={styles.sub}>
@@ -278,20 +278,20 @@ export default function SleepDetailsScreen({ route }) {
 
               <View style={styles.divider} />
 
-              <FactorRow
+              {/* <FactorRow
                 icon="🌙"
                 title="Do Not Disturb"
                 value={ui.dnd}
                 note="Enable DND to reduce interruptions during sleep time."
                 color="rgba(245,158,11,0.14)"
-              />
+              /> */}
             </Card>
           </>
         )}
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

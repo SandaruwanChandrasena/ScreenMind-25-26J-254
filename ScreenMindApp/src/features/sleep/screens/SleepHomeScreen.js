@@ -11,7 +11,7 @@ import {
   NativeModules,
 } from "react-native";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
@@ -278,7 +278,7 @@ export default function SleepHomeScreen({ navigation }) {
   const reasons = riskResult?.reasons?.length ? riskResult.reasons : [];
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
@@ -436,7 +436,7 @@ export default function SleepHomeScreen({ navigation }) {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

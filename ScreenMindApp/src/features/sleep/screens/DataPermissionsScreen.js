@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { check, request, PERMISSIONS, RESULTS } from "react-native-permissions";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 
@@ -214,7 +214,7 @@ export default function DataPermissionsScreen() {
   const specialEnabled = (val) => val === true;
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Data & Permissions</Text>
         <Text style={styles.sub}>
@@ -314,7 +314,7 @@ export default function DataPermissionsScreen() {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 
