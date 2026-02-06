@@ -1,16 +1,22 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/features/isolation/screens/IsolationOverviewScreen.js
+
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
+import { RESULTS } from "react-native-permissions";
 
 import ScreenBackground from "../../../components/ScreenBackground";
+import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
+import GaugeRing from "../components/GaugeRing";
 
-// ✅ NEW: storage + scoring + collector
+// ✅ Storage + scoring + collector
 import { getIsolationPrefs, upsertDailyIsolationRecord } from "../services/isolationStorage";
 import { computeIsolationRisk } from "../services/isolationScoring";
-import { generateDummyFeatures } from "../services/isolationCollector";
+import { collectRealFeatures } from "../services/isolationCollector";
+import { checkAllPermissions } from "../services/permissionHelper";
 
 // ---------- Helpers ----------
 function formatMinutes(min) {
@@ -32,9 +38,7 @@ function todayISO() {
 }
 
 function buildSummary(features) {
-  // Simple, explainable summary (panel-friendly)
   const reasons = [];
-
   if ((features.dailyDistanceMeters ?? 0) < 800) reasons.push("low movement");
   if ((features.timeAtHomePct ?? 0) > 75) reasons.push("high time at home");
   if ((features.uniqueContacts ?? 999) <= 2) reasons.push("fewer unique contacts");
@@ -42,9 +46,30 @@ function buildSummary(features) {
   if ((features.bluetoothAvgDevices ?? 999) <= 2) reasons.push("low nearby-device exposure");
 
   if (!reasons.length) return "Your recent patterns look balanced. Keep maintaining healthy social exposure.";
-
-  // Keep it short like your mock UI
   return `${reasons.slice(0, 2).join(" + ")} detected over the last 7 days.`;
+}
+
+function safePrefs(p) {
+  // If storage returns null/undefined, default all to false (privacy-safe)
+  return {
+    gps: !!p?.gps,
+    calls: !!p?.calls,
+    sms: !!p?.sms,
+    usage: !!p?.usage,
+    bluetooth: !!p?.bluetooth,
+    wifi: !!p?.wifi,
+  };
+}
+
+function computeHasRequiredPermissions(perms, p) {
+  // Only require what user enabled in Privacy toggles
+  const needsGps = p.gps;
+  const gpsOk =
+    !needsGps ||
+    (perms.location === RESULTS.GRANTED && perms.backgroundLocation === RESULTS.GRANTED);
+
+  // (You can extend this later for calls/sms/bluetooth if your permissionHelper supports them)
+  return gpsOk;
 }
 
 // ---------------------------------------------------------
@@ -54,41 +79,58 @@ export default function IsolationOverviewScreen({ navigation }) {
   const [prefs, setPrefs] = useState(null);
   const [features, setFeatures] = useState(null);
   const [risk, setRisk] = useState({ score: 0, label: "Low", breakdown: {} });
+  const [hasPermissions, setHasPermissions] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setErrorMsg("");
+
+    try {
+      // 1) Load consent toggles first (so we know what permissions to require)
+      const storedPrefs = safePrefs(await getIsolationPrefs());
+      setPrefs(storedPrefs);
+
+      // 2) Check permissions
+      const perms = await checkAllPermissions();
+      const ok = computeHasRequiredPermissions(perms, storedPrefs);
+      setHasPermissions(ok);
+
+      // 3) Collect features (real phone data)
+      // If permissions are not enough, collector may fail -> catch below and show warning card
+      const f = await collectRealFeatures();
+      setFeatures(f);
+
+      // 4) Compute risk
+      const r = computeIsolationRisk(f, storedPrefs);
+      setRisk(r);
+
+      // 5) Save today record (for Stats/Trends)
+      const record = {
+        date: todayISO(),
+        features: f,
+        riskScore: r.score,
+        riskLabel: r.label,
+        breakdown: r.breakdown,
+      };
+      await upsertDailyIsolationRecord(record);
+    } catch (e) {
+      console.log("IsolationOverview init error:", e);
+      setErrorMsg(
+        "Couldn’t load some metrics. Please enable Privacy permissions and try again."
+      );
+
+      // Keep UI stable even if collection fails
+      setFeatures((prev) => prev ?? {});
+      setRisk((prev) => prev ?? { score: 0, label: "Low", breakdown: {} });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    (async () => {
-      try {
-        // 1) Load consent toggles
-        const p = await getIsolationPrefs();
-        setPrefs(p);
-
-        // 2) Collect features (dummy for now)
-        // ✅ EDIT LATER (IMPORTANT): Replace this with real sensor feature extraction
-        const f = generateDummyFeatures();
-
-        // 3) Compute risk score
-        const r = computeIsolationRisk(f, p);
-
-        // 4) Save today record (used by Stats/Trends screens)
-        const record = {
-          date: todayISO(),
-          features: f,
-          riskScore: r.score,
-          riskLabel: r.label,
-          breakdown: r.breakdown,
-        };
-        await upsertDailyIsolationRecord(record);
-
-        // 5) Update UI state
-        setFeatures(f);
-        setRisk(r);
-      } catch (e) {
-        console.log("IsolationOverview init error:", e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+    loadData();
+  }, [loadData]);
 
   // Build highlight cards based on features + prefs
   const highlights = useMemo(() => {
@@ -99,27 +141,31 @@ export default function IsolationOverviewScreen({ navigation }) {
     if (prefs.gps) {
       list.push({ label: "Daily distance", value: formatMeters(features.dailyDistanceMeters) });
       list.push({ label: "Time at home", value: `${Math.round(features.timeAtHomePct || 0)}%` });
+    } else {
+      list.push({ label: "Daily distance", value: "Off" });
+      list.push({ label: "Time at home", value: "Off" });
     }
 
-    if (prefs.calls) {
+    if (prefs.calls || prefs.sms) {
       list.push({ label: "Unique contacts", value: `${Math.round(features.uniqueContacts || 0)}` });
+    } else {
+      list.push({ label: "Unique contacts", value: "Off" });
     }
 
     if (prefs.usage) {
       list.push({ label: "Night usage", value: formatMinutes(features.nightUsageMinutes) });
+    } else {
+      list.push({ label: "Night usage", value: "Off" });
     }
 
     if (prefs.wifi) {
-      // You store wifiDiversity as entropy number → show Low/Medium/High
       const w = features.wifiDiversity ?? 0;
       const wifiLabel = w < 0.4 ? "Low" : w < 0.9 ? "Medium" : "High";
       list.push({ label: "WiFi diversity", value: wifiLabel });
     } else {
-      // show "WiFi diversity" even if disabled (optional)
       list.push({ label: "WiFi diversity", value: "Off" });
     }
 
-    // Ensure grid looks nice (4 cards)
     return list.slice(0, 4);
   }, [features, prefs]);
 
@@ -145,12 +191,56 @@ export default function IsolationOverviewScreen({ navigation }) {
         <Text style={styles.title}>📍 Social Well-being</Text>
         <Text style={styles.sub}>Loneliness risk based on mobility + communication + behaviour.</Text>
 
+        {/* If something failed */}
+        {!!errorMsg && (
+          <GlassCard
+            icon="alert-circle-outline"
+            title="Limited data"
+            subtitle="Some metrics were not available"
+            style={{ marginTop: spacing.lg }}
+          >
+            <Text style={styles.body}>{errorMsg}</Text>
+
+            <View style={{ height: spacing.md }} />
+            <Pressable style={styles.bigBtn} onPress={loadData}>
+              <Text style={styles.bigBtnText}>Retry</Text>
+              <Icon name="refresh" size={18} color={colors.text} />
+            </Pressable>
+          </GlassCard>
+        )}
+
+        {/* Permission Warning (only when required permissions missing) */}
+        {!hasPermissions && (
+          <GlassCard
+            icon="warning-outline"
+            title="Permissions required"
+            subtitle="Grant permissions to enable tracking"
+            style={{ marginTop: spacing.lg }}
+          >
+            <Text style={styles.body}>
+              Some features are turned ON in Privacy, but required permissions are not granted.
+              Please open Privacy & Consent and enable the needed permissions.
+            </Text>
+
+            <View style={{ height: spacing.md }} />
+
+            <PrimaryButton
+              title="Go to Privacy Settings"
+              onPress={() => navigation.navigate("IsolationPrivacy")}
+            />
+          </GlassCard>
+        )}
+
+        {/* Main Risk Card */}
         <GlassCard
           icon="alert-circle-outline"
           title={`Risk: ${risk.label}`}
           subtitle={`${risk.score}/100 • Last 7 days`}
           style={{ marginTop: spacing.lg }}
         >
+          <GaugeRing score={risk.score} label={risk.label} size={200} />
+
+          <View style={{ height: spacing.md }} />
           <Text style={styles.body}>{summary}</Text>
 
           <View style={{ height: spacing.md }} />
@@ -206,7 +296,7 @@ const styles = StyleSheet.create({
   bigBtnText: { color: colors.text, fontWeight: "900" },
 
   sectionTitle: { color: colors.text, fontWeight: "900", marginTop: spacing.lg, fontSize: 16 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginTop: spacing.md },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: spacing.md },
   statCard: {
     width: "48%",
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -214,6 +304,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 18,
     padding: spacing.md,
+    marginBottom: spacing.md,
   },
   statLabel: { color: colors.muted, fontWeight: "800", fontSize: 12 },
   statValue: { color: colors.text, fontWeight: "900", fontSize: 18, marginTop: 6 },
