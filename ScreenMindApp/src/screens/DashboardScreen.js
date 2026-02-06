@@ -64,7 +64,7 @@ export default function DashboardScreen({ navigation }) {
             title="Social Media"
             subtitle="Interaction risk patterns"
             tint="rgba(14,165,233,0.22)"
-            onPress={() => navigation.navigate("SocialMediaStack")}
+            onPress={() => {}}
           />
           <FeatureCard
             emoji="📍"
