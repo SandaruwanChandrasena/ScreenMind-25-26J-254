@@ -1,4 +1,4 @@
-package com.screenmindapp.settings;
+package com.screenmindapp.sleep;
 
 import com.facebook.react.ReactPackage;
 import com.facebook.react.bridge.NativeModule;
@@ -9,17 +9,16 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-public class SettingsAccessPackage implements ReactPackage {
+public class NotificationBridgePackage implements ReactPackage {
+  @Override
+  public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
+    List<NativeModule> modules = new ArrayList<>();
+    modules.add(new NotificationBridgeModule(reactContext));
+    return modules;
+  }
 
   @Override
   public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
     return Collections.emptyList();
-  }
-
-  @Override
-  public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
-    List<NativeModule> modules = new ArrayList<>();
-    modules.add(new SettingsAccessModule(reactContext));
-    return modules;
   }
 }

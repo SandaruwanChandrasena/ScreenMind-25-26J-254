@@ -1,4 +1,4 @@
-package com.screenmindapp.notification;
+package com.screenmindapp.sleep;
 
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;

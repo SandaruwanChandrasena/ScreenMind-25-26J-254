@@ -1,4 +1,4 @@
-package com.screenmindapp.notification;
+package com.screenmindapp.sleep;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

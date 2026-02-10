@@ -7,8 +7,8 @@ import com.facebook.react.ReactHost
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 
-import com.screenmindapp.settings.SettingsAccessPackage
-import com.screenmindapp.notification.NotificationBridgePackage
+import com.screenmindapp.sleep_settings.SettingsAccessPackage
+import com.screenmindapp.sleep.NotificationBridgePackage
 
 class MainApplication : Application(), ReactApplication {
 

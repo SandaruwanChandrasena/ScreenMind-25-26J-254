@@ -1,4 +1,4 @@
-package com.screenmindapp.notification;
+package com.screenmindapp.sleep;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.WritableMap;

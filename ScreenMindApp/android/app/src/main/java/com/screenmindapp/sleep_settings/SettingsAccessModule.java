@@ -1,4 +1,4 @@
-package com.screenmindapp.settings;
+package com.screenmindapp.sleep_settings;
 
 import android.app.AppOpsManager;
 import android.app.NotificationManager;
