@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert, Linking } from "react-native";
-import { RESULTS } from "react-native-permissions";
+import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert } from "react-native";
 
 import ScreenBackground from "../../../components/ScreenBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
-import { 
-  checkAllPermissions, 
+import {
+  RESULTS,
+  checkAllPermissions,
   requestLocationPermission,
   requestBackgroundLocationPermission,
   requestBluetoothPermissions,

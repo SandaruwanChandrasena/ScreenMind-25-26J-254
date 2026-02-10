@@ -1,32 +1,35 @@
 import { Platform, PermissionsAndroid, Linking, Alert } from "react-native";
-import { request, check, PERMISSIONS, RESULTS } from "react-native-permissions";
+
+export const RESULTS = {
+  UNAVAILABLE: "unavailable",
+  DENIED: "denied",
+  BLOCKED: "blocked",
+  GRANTED: "granted",
+  LIMITED: "limited",
+};
 
 // Define all permissions needed for isolation detection
 export const ISOLATION_PERMISSIONS = {
   LOCATION: Platform.select({
-    android: PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION,
-    ios: PERMISSIONS.IOS.LOCATION_WHEN_IN_USE,
+    android: PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
   }),
   BACKGROUND_LOCATION: Platform.select({
-    android: PERMISSIONS.ANDROID.ACCESS_BACKGROUND_LOCATION,
-    ios: PERMISSIONS.IOS.LOCATION_ALWAYS,
+    android: PermissionsAndroid.PERMISSIONS.ACCESS_BACKGROUND_LOCATION,
   }),
   BLUETOOTH_SCAN: Platform.select({
-    android: PERMISSIONS.ANDROID.BLUETOOTH_SCAN,
-    ios: PERMISSIONS.IOS.BLUETOOTH_PERIPHERAL,
+    android: PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
   }),
   BLUETOOTH_CONNECT: Platform.select({
-    android: PERMISSIONS.ANDROID.BLUETOOTH_CONNECT,
+    android: PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
   }),
   CALL_LOG: Platform.select({
-    android: PERMISSIONS.ANDROID.READ_CALL_LOG,
+    android: PermissionsAndroid.PERMISSIONS.READ_CALL_LOG,
   }),
   SMS: Platform.select({
-    android: PERMISSIONS.ANDROID.READ_SMS,
+    android: PermissionsAndroid.PERMISSIONS.READ_SMS,
   }),
   NOTIFICATIONS: Platform.select({
-    android: PERMISSIONS.ANDROID.POST_NOTIFICATIONS,
-    ios: PERMISSIONS.IOS.NOTIFICATIONS,
+    android: PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
   }),
 };
 
@@ -35,9 +38,10 @@ export const ISOLATION_PERMISSIONS = {
  */
 export async function checkPermission(permission) {
   if (!permission) return RESULTS.UNAVAILABLE;
+  if (Platform.OS !== "android") return RESULTS.UNAVAILABLE;
   try {
-    const result = await check(permission);
-    return result;
+    const granted = await PermissionsAndroid.check(permission);
+    return granted ? RESULTS.GRANTED : RESULTS.DENIED;
   } catch (error) {
     console.warn("Permission check error:", error);
     return RESULTS.UNAVAILABLE;
@@ -49,10 +53,13 @@ export async function checkPermission(permission) {
  */
 export async function requestPermission(permission) {
   if (!permission) return RESULTS.UNAVAILABLE;
+  if (Platform.OS !== "android") return RESULTS.UNAVAILABLE;
   
   try {
-    const result = await request(permission);
-    return result;
+    const result = await PermissionsAndroid.request(permission);
+    if (result === PermissionsAndroid.RESULTS.GRANTED) return RESULTS.GRANTED;
+    if (result === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) return RESULTS.BLOCKED;
+    return RESULTS.DENIED;
   } catch (error) {
     console.warn("Permission request error:", error);
     return RESULTS.BLOCKED;

@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
-import { RESULTS } from "react-native-permissions";
+import { RESULTS } from "../services/permissionHelper";
 
 import ScreenBackground from "../../../components/ScreenBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
