@@ -1,5 +1,6 @@
 import React, { useContext } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 
 import { AuthContext } from "../context/AuthContext";
 import { colors } from "../theme/colors";
@@ -8,9 +9,9 @@ import { spacing } from "../theme/spacing";
 import DashboardBackground from "../components/DashboardBackground";
 import FeatureCard from "../components/FeatureCard";
 
-
 export default function DashboardScreen() {
   const { user } = useContext(AuthContext);
+  const navigation = useNavigation();
 
   // Dummy summary (later replace with your ML predictions)
   const overallRisk = "Moderate";
@@ -18,14 +19,13 @@ export default function DashboardScreen() {
 
   return (
     <DashboardBackground>
-      {/* ✅ Your layout stays the same — only background is new */}
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.brand}>SCREENMIND</Text>
 
         <Text style={styles.title}>Welcome, {user?.displayName || "User"} 👋</Text>
         <Text style={styles.sub}>Your calm dashboard for healthier screen habits.</Text>
 
-        {/* Summary card (keep or remove — your choice) */}
+        {/* Summary card */}
         <View style={styles.summaryCard}>
           <View style={{ flex: 1 }}>
             <Text style={styles.summaryTitle}>Overall Risk</Text>
@@ -40,14 +40,14 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* Cards (same as before) */}
+        {/* Cards */}
         <View style={styles.grid}>
           <FeatureCard
             emoji="📱"
             title="Screen Usage"
             subtitle="Usage & addiction risk"
             tint="rgba(124,58,237,0.25)"
-            onPress={() => {}}
+            onPress={() => navigation.navigate("QuestionnaireScreen")}
           />
           <FeatureCard
             emoji="😴"

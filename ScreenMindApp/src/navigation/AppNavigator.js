@@ -11,7 +11,19 @@ import SignUpScreen from "../screens/SignUpScreen";
 import DashboardScreen from "../screens/DashboardScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 
+// ✅ DIRECT IMPORTS (Guaranteed fix — avoids index.js export issues)
+import QuestionnaireScreen from "../features/screenUsage/mentalHealthPredictor/screens/QuestionnaireScreen";
+import MentalHealthDashboard from "../features/screenUsage/mentalHealthPredictor/screens/MentalHealthDashboard";
+import PredictionHistoryScreen from "../features/screenUsage/mentalHealthPredictor/screens/PredictionHistoryScreen";
+
 import { colors } from "../theme/colors";
+
+console.log("QuestionnaireScreen:", QuestionnaireScreen);
+console.log("MentalHealthDashboard:", MentalHealthDashboard);
+console.log("PredictionHistoryScreen:", PredictionHistoryScreen);
+
+console.log("QS:", QuestionnaireScreen);
+
 
 const Stack = createStackNavigator();
 
@@ -66,6 +78,23 @@ export default function AppNavigator() {
               name="Profile"
               component={ProfileScreen}
               options={{ title: "Profile" }}
+            />
+
+            {/* ✅ Your feature screens should be inside the logged-in flow */}
+            <Stack.Screen
+              name="QuestionnaireScreen"
+              component={QuestionnaireScreen}
+              options={{ title: "Assessment" }}
+            />
+            <Stack.Screen
+              name="MentalHealthDashboard"
+              component={MentalHealthDashboard}
+              options={{ title: "Screen Usage Risk" }}
+            />
+            <Stack.Screen
+              name="PredictionHistoryScreen"
+              component={PredictionHistoryScreen}
+              options={{ title: "History" }}
             />
           </>
         ) : (
