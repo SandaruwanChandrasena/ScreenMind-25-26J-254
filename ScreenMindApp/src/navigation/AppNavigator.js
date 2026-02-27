@@ -11,10 +11,9 @@ import SignUpScreen from "../screens/SignUpScreen";
 import DashboardScreen from "../screens/DashboardScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 
-// ✅ DIRECT IMPORTS (Guaranteed fix — avoids index.js export issues)
-import QuestionnaireScreen from "../features/screenUsage/mentalHealthPredictor/screens/QuestionnaireScreen";
-import MentalHealthDashboard from "../features/screenUsage/mentalHealthPredictor/screens/MentalHealthDashboard";
-import PredictionHistoryScreen from "../features/screenUsage/mentalHealthPredictor/screens/PredictionHistoryScreen";
+import QuestionnaireScreen from "../features/screenUsage/screens/QuestionnaireScreen";
+import MentalHealthDashboard from "../features/screenUsage/screens/MentalHealthDashboard";
+import PredictionHistoryScreen from "../features/screenUsage/screens/PredictionHistoryScreen";
 
 import { colors } from "../theme/colors";
 

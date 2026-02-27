@@ -1,25 +1,58 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Alert } from "react-native";
 
-import { colors } from "../../../../theme/colors";
-import { spacing } from "../../../../theme/spacing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import firestore from "@react-native-firebase/firestore";
-import auth from "@react-native-firebase/auth";
+import { colors } from "../../../theme/colors";
+import { spacing } from "../../../theme/spacing";
 
-import { PHQ9_QUESTIONS, PHQ9_OPTIONS } from "../questionnaires/phq9";
-import { GAD7_QUESTIONS, GAD7_OPTIONS } from "../questionnaires/gad7";
-import { sumScore, phq9Severity, gad7Severity, combinedQuestionnaireRisk } from "../questionnaires/scoring";
+import { PHQ9_QUESTIONS, PHQ9_OPTIONS } from "../services/phq9";
+import { GAD7_QUESTIONS, GAD7_OPTIONS } from "../services/gad7";
+import { sumScore, phq9Severity, gad7Severity } from "../services/scoring";
+
+import { generateSimulatedDailyUsage, computeUsageRisk } from "../services/usageLogs";
+
+// ✅ local storage key
+const STORAGE_KEY = "screenUsageAssessments";
+
+function safeJsonParse(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
+function makeId() {
+  return `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function clamp01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+
+// Normalize questionnaire distress 0..1
+function distressIndex01(phq9Score, gad7Score) {
+  const phqNorm = phq9Score / 27; // 0..1
+  const gadNorm = gad7Score / 21; // 0..1
+  return clamp01((phqNorm + gadNorm) / 2);
+}
+
+function labelFrom01(score01) {
+  if (score01 >= 0.67) return "High";
+  if (score01 >= 0.34) return "Moderate";
+  return "Low";
+}
 
 export default function QuestionnaireScreen({ navigation }) {
-  const [answers, setAnswers] = useState({}); // { id: 0..3 }
+  const [answers, setAnswers] = useState({});
+  const [saving, setSaving] = useState(false);
 
   const phq9Ids = useMemo(() => PHQ9_QUESTIONS.map((q) => q.id), []);
   const gad7Ids = useMemo(() => GAD7_QUESTIONS.map((q) => q.id), []);
 
   const totalQuestions = phq9Ids.length + gad7Ids.length;
   const answeredCount = Object.keys(answers).length;
-
   const allAnswered = answeredCount === totalQuestions;
 
   const phq9Score = useMemo(() => sumScore(answers, phq9Ids), [answers, phq9Ids]);
@@ -28,45 +61,89 @@ export default function QuestionnaireScreen({ navigation }) {
   const phq9 = useMemo(() => phq9Severity(phq9Score), [phq9Score]);
   const gad7 = useMemo(() => gad7Severity(gad7Score), [gad7Score]);
 
-  const combined = useMemo(
-    () => combinedQuestionnaireRisk({ phq9Score, gad7Score }),
-    [phq9Score, gad7Score]
-  );
-
   function setAnswer(questionId, value) {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
   }
 
-async function onSubmit() {
-  if (!allAnswered) {
-    Alert.alert("Complete all questions", "Please answer every question before submitting.");
-    return;
+  async function onSubmit() {
+    if (!allAnswered) {
+      Alert.alert("Complete all questions", "Please answer every question before submitting.");
+      return;
+    }
+    if (saving) return;
+
+    setSaving(true);
+
+    try {
+      // ✅ 1) Simulated usage log (try to pass q scores; if your function doesn't accept params, it still works)
+      let usageLog;
+      try {
+        usageLog = generateSimulatedDailyUsage({ phq9Score, gad7Score });
+      } catch {
+        usageLog = generateSimulatedDailyUsage();
+      }
+
+      // ✅ 2) Usage risk (0..1) + breakdown
+      const usage = computeUsageRisk(usageLog);
+      const usageRisk01 = clamp01(usage?.usageRisk ?? 0);
+
+      // ✅ 3) Questionnaire distress (0..1)
+      const qDistress01 = distressIndex01(phq9Score, gad7Score);
+
+      // ✅ 4) Hybrid AI score (0..1)
+      // (You can change weights anytime — this is your “model”)
+      const hybridScore01 = clamp01(0.6 * qDistress01 + 0.4 * usageRisk01);
+      const aiLabel = labelFrom01(hybridScore01);
+
+      // ✅ 5) Final result object (SERIALIZABLE)
+      const result = {
+        id: makeId(),
+        submittedAt: new Date().toISOString(),
+
+        // keep answers for research evidence
+        answers,
+
+        phq9: { score: phq9Score, severity: phq9.label },
+        gad7: { score: gad7Score, severity: gad7.label },
+
+        // keep your old field name for compatibility
+        combinedRisk: {
+          label: aiLabel,
+          score: Number(hybridScore01.toFixed(3)),
+        },
+
+        // ✅ clearer AI output too (recommended)
+        aiPrediction: {
+          label: aiLabel,
+          score01: Number(hybridScore01.toFixed(3)),
+          weights: { questionnaire: 0.6, usage: 0.4 },
+        },
+
+        // ✅ usage data stored
+        usageLog,
+        usageRisk: {
+          usageRisk01,
+          breakdown: usage?.breakdown || {},
+        },
+      };
+
+      // ✅ 6) Save to AsyncStorage history
+      const existingStr = await AsyncStorage.getItem(STORAGE_KEY);
+      const existing = safeJsonParse(existingStr, []);
+
+      const next = Array.isArray(existing) ? [result, ...existing] : [result];
+      const limited = next.slice(0, 50);
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(limited));
+
+      // ✅ 7) Navigate
+      navigation.navigate("MentalHealthDashboard", { result });
+    } catch (error) {
+      console.error("LOCAL SAVE ERROR:", error);
+      Alert.alert("Error", error?.message || "Failed to save assessment locally");
+    } finally {
+      setSaving(false);
+    }
   }
-
-  const user = auth().currentUser;
-  if (!user) return;
-
-  const result = {
-    createdAt: firestore.FieldValue.serverTimestamp(),
-    phq9: { score: phq9Score, severity: phq9.label },
-    gad7: { score: gad7Score, severity: gad7.label },
-    combinedRisk: combined,
-  };
-
-  try {
-    await firestore()
-      .collection("users")
-      .doc(user.uid)
-      .collection("screenUsageAssessments")
-      .add(result);
-
-    navigation.navigate("MentalHealthDashboard", { result });
-  } catch (error) {
-    Alert.alert("Error", "Failed to save assessment");
-    console.error(error);
-  }
-}
-
 
   return (
     <View style={styles.root}>
@@ -102,7 +179,6 @@ async function onSubmit() {
 
         <View style={styles.sectionDivider} />
 
-        {/* Summary */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Current summary</Text>
 
@@ -113,25 +189,23 @@ async function onSubmit() {
             GAD-7: <Text style={styles.bold}>{gad7Score}</Text> ({gad7.label})
           </Text>
 
-          <Text style={styles.summaryLine}>
-            Combined risk: <Text style={styles.bold}>{combined.label}</Text>
-          </Text>
-
           <Text style={styles.progress}>
             Answered {answeredCount}/{totalQuestions}
           </Text>
         </View>
 
-        {/* Submit */}
         <Pressable
           onPress={onSubmit}
+          disabled={!allAnswered || saving}
           style={({ pressed }) => [
             styles.submitBtn,
-            !allAnswered && styles.submitBtnDisabled,
-            pressed && allAnswered && { opacity: 0.9 },
+            (!allAnswered || saving) && styles.submitBtnDisabled,
+            pressed && allAnswered && !saving && { opacity: 0.9 },
           ]}
         >
-          <Text style={styles.submitText}>{allAnswered ? "Submit Assessment" : "Answer all questions"}</Text>
+          <Text style={styles.submitText}>
+            {saving ? "Saving..." : allAnswered ? "Submit Assessment" : "Answer all questions"}
+          </Text>
         </Pressable>
 
         <View style={{ height: spacing.xxl }} />
@@ -158,7 +232,9 @@ function QuestionBlock({ title, value, options, onChange, isSafetyItem }) {
                 pressed && { opacity: 0.9 },
               ]}
             >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt.label}</Text>
+              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
+                {opt.label}
+              </Text>
             </Pressable>
           );
         })}
@@ -224,4 +300,3 @@ const styles = StyleSheet.create({
   submitBtnDisabled: { backgroundColor: "rgba(124,58,237,0.35)" },
   submitText: { color: "#fff", fontWeight: "900" },
 });
-

@@ -1,5 +1,5 @@
 import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../../../../services/firebase/firestore";
+import { db } from "../../../services/firebase/firestore";
 
 import { scorePHQ9Total, scoreGAD7Total } from "../questionnaires/scoring";
 
