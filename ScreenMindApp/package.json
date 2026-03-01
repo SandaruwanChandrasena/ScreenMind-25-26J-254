@@ -23,6 +23,7 @@
     "axios": "^1.13.2",
     "react": "19.2.0",
     "react-native": "0.83.1",
+    "react-native-android-notification-listener": "^5.0.1",
     "react-native-background-fetch": "^4.3.0",
     "react-native-ble-plx": "^3.5.0",
     "react-native-geolocation-service": "^5.3.1",

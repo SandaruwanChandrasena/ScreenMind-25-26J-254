@@ -8,13 +8,11 @@ import { spacing } from '../theme/spacing';
 import DashboardBackground from '../components/DashboardBackground';
 import FeatureCard from '../components/FeatureCard';
 
-// ✅ Social Media route constant (used in AppNavigator)
 import { SM_ROUTES } from '../features/socialMedia';
 
 export default function DashboardScreen({ navigation }) {
   const { user } = useContext(AuthContext);
 
-  // Dummy summary (later replace with your ML predictions)
   const overallRisk = 'Moderate';
   const overallHint = 'Late-night usage increased this week.';
 
@@ -47,14 +45,16 @@ export default function DashboardScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Cards */}
+        {/* ========================= */}
+        {/* First Row */}
+        {/* ========================= */}
         <View style={styles.grid}>
           <FeatureCard
             emoji="📱"
             title="Screen Usage"
             subtitle="Usage & addiction risk"
             tint="rgba(124,58,237,0.25)"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('QuestionnaireScreen')}
           />
 
           <FeatureCard
@@ -62,18 +62,19 @@ export default function DashboardScreen({ navigation }) {
             title="Sleep"
             subtitle="Sleep disruption analysis"
             tint="rgba(34,197,94,0.22)"
-            // ✅ Flat navigator route (matches your friend's structure)
             onPress={() => navigation.navigate('SleepHome')}
           />
         </View>
 
+        {/* ========================= */}
+        {/* Second Row */}
+        {/* ========================= */}
         <View style={styles.grid}>
           <FeatureCard
             emoji="💬"
             title="Social Media"
             subtitle="Interaction risk patterns"
             tint="rgba(14,165,233,0.22)"
-            // ✅ Uses the Social Media home route from SM_ROUTES
             onPress={() => navigation.navigate(SM_ROUTES.Home)}
           />
 
@@ -82,7 +83,6 @@ export default function DashboardScreen({ navigation }) {
             title="Isolation"
             subtitle="Mobility & loneliness risk"
             tint="rgba(239,68,68,0.18)"
-            // ✅ Flat navigator route (matches your friend's structure)
             onPress={() => navigation.navigate('IsolationOverview')}
           />
         </View>
@@ -108,6 +108,7 @@ const styles = StyleSheet.create({
   },
 
   title: { color: colors.text, fontSize: 26, fontWeight: '900' },
+
   sub: {
     color: colors.muted,
     marginTop: spacing.xs,
@@ -128,12 +129,14 @@ const styles = StyleSheet.create({
   },
 
   summaryTitle: { color: colors.muted, fontSize: 13, fontWeight: '800' },
+
   summaryValue: {
     color: colors.text,
     fontSize: 24,
     fontWeight: '900',
     marginTop: 6,
   },
+
   summaryHint: {
     color: colors.faint,
     fontSize: 12,
@@ -149,10 +152,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+
   pillText: { color: colors.text, fontWeight: '900', fontSize: 12 },
 
-  grid: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
+  grid: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
 
   footerLink: { marginTop: spacing.md, alignItems: 'center' },
+
   footerText: { color: colors.faint, fontWeight: '700' },
 });
