@@ -93,10 +93,21 @@
         <!-- Notification Listener (Sleep / Notifications module) -->
         <!-- REQUIRED to appear in Notification Access settings -->
         <!-- ===================== -->
-        <service
+        <!-- <service
             android:name=".notification.ScreenMindNotificationListener"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="false">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service> -->
+
+
+        <service
+            android:name="com.lesimoes.androidnotificationlistener.RNAndroidNotificationListener"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
