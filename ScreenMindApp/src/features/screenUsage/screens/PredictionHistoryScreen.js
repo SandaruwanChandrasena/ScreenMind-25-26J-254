@@ -1,98 +1,189 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, StyleSheet, Pressable, FlatList, Alert } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  FlatList,
+  Alert,
+  ActivityIndicator,
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 
-const STORAGE_KEY = "screenUsageAssessments"; // must match what we use in Questionnaire screen
+import { colors } from "../../../theme/colors";
+import { spacing } from "../../../theme/spacing";
 
-export default function PredictionHistoryScreen() {
-  const navigation = useNavigation();
+const STORAGE_KEY = "screenUsageAssessments";
+
+function safeJsonParse(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
+function formatDateTime(iso) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return "—";
+  }
+}
+
+export default function PredictionHistoryScreen({ navigation }) {
   const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const loadHistory = useCallback(async () => {
+  async function loadHistory() {
+    setLoading(true);
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      // newest first
-      setItems(Array.isArray(arr) ? arr.slice().reverse() : []);
+      const data = safeJsonParse(raw, []);
+      setItems(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error("LOAD HISTORY ERROR:", e);
       setItems([]);
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  }
 
   useFocusEffect(
     useCallback(() => {
       loadHistory();
-    }, [loadHistory])
+    }, [])
   );
 
-  async function clearHistory() {
-    Alert.alert("Clear history?", "This will remove all saved assessments from this device.", [
+  async function persist(nextItems) {
+    setItems(nextItems);
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(nextItems));
+  }
+
+  function openDetails(item) {
+    navigation.navigate("MentalHealthDashboard", { result: item });
+  }
+
+  function onDeleteOne(itemId) {
+    Alert.alert("Delete this record?", "This will remove this assessment from local history.", [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Clear",
+        text: "Delete",
         style: "destructive",
         onPress: async () => {
           try {
-            await AsyncStorage.removeItem(STORAGE_KEY);
-            setItems([]);
+            const next = items.filter((x) => x?.id !== itemId);
+            await persist(next);
           } catch (e) {
-            console.error("CLEAR HISTORY ERROR:", e);
+            console.error("DELETE ONE ERROR:", e);
+            Alert.alert("Error", "Failed to delete the record");
           }
         },
       },
     ]);
   }
 
-  function openResult(item) {
-    // item should already be serializable (no FieldValue)
-    navigation.navigate("MentalHealthDashboard", { result: item });
+  function onClearAll() {
+    Alert.alert("Clear all history?", "This will delete all saved assessments on this device.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear all",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await AsyncStorage.removeItem(STORAGE_KEY);
+            setItems([]);
+          } catch (e) {
+            console.error("CLEAR ALL ERROR:", e);
+            Alert.alert("Error", "Failed to clear history");
+          }
+        },
+      },
+    ]);
   }
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Prediction History</Text>
+  const renderItem = ({ item }) => {
+    const label = item?.combinedRisk?.label ?? "—";
+    const score = item?.combinedRisk?.score ?? "—";
+    const when = item?.submittedAt;
 
-        <Pressable onPress={clearHistory} style={styles.clearBtn}>
-          <Text style={styles.clearText}>Clear</Text>
+    return (
+      <Pressable
+        onPress={() => openDetails(item)}
+        style={({ pressed }) => [styles.itemCard, pressed && { opacity: 0.92 }]}
+      >
+        <View style={styles.itemTop}>
+          <Text style={styles.itemTitle}>Overall Risk</Text>
+
+          <View style={styles.pill}>
+            <Text style={styles.pillText}>{label}</Text>
+          </View>
+        </View>
+
+        <Text style={styles.itemSub}>
+          Submitted: <Text style={styles.bold}>{formatDateTime(when)}</Text>
+        </Text>
+
+        <Text style={styles.itemSub}>
+          Hybrid score: <Text style={styles.bold}>{score}</Text>
+        </Text>
+
+        <View style={styles.itemBottom}>
+          <Text style={styles.tapHint}>Tap to view full details</Text>
+
+          <Pressable
+            onPress={() => onDeleteOne(item?.id)}
+            style={({ pressed }) => [styles.deleteBtn, pressed && { opacity: 0.9 }]}
+            hitSlop={10}
+          >
+            <Text style={styles.deleteText}>Delete</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    );
+  };
+
+  return (
+    <View style={styles.root}>
+      <View style={styles.header}>
+        <Text style={styles.h1}>Prediction History</Text>
+
+        <Pressable
+          onPress={onClearAll}
+          style={({ pressed }) => [styles.clearBtn, pressed && { opacity: 0.9 }]}
+        >
+          <Text style={styles.clearText}>Clear all</Text>
         </Pressable>
       </View>
 
-      {items.length === 0 ? (
-        <View style={styles.emptyBox}>
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator />
+          <Text style={styles.loadingText}>Loading…</Text>
+        </View>
+      ) : items.length === 0 ? (
+        <View style={styles.center}>
           <Text style={styles.emptyTitle}>No history yet</Text>
           <Text style={styles.emptySub}>Submit an assessment to see it here.</Text>
+
+          <Pressable
+            onPress={() => navigation.navigate("QuestionnaireScreen")}
+            style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.primaryBtnText}>Go to Questionnaire</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item, index) => item?.submittedAt ?? String(index)}
-          contentContainerStyle={{ paddingBottom: 20 }}
-          renderItem={({ item }) => {
-            const phq = item?.phq9?.score ?? "-";
-            const gad = item?.gad7?.score ?? "-";
-            const risk = item?.combinedRisk?.label ?? "-";
-            const date = item?.submittedAt ? new Date(item.submittedAt).toLocaleString() : "";
-
-            return (
-              <Pressable onPress={() => openResult(item)} style={styles.card}>
-                <Text style={styles.cardTop}>
-                  Risk: <Text style={styles.bold}>{risk}</Text>
-                </Text>
-
-                <Text style={styles.line}>PHQ-9: {phq}</Text>
-                <Text style={styles.line}>GAD-7: {gad}</Text>
-
-                {!!date && <Text style={styles.date}>{date}</Text>}
-              </Pressable>
-            );
-          }}
+          keyExtractor={(it) => String(it?.id ?? Math.random())}
+          renderItem={renderItem}
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl }}
         />
       )}
 
-      <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
+      <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
         <Text style={styles.backText}>Back</Text>
       </Pressable>
     </View>
@@ -100,42 +191,85 @@ export default function PredictionHistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  root: { flex: 1, backgroundColor: colors.bg1 },
 
-  title: { fontSize: 20, fontWeight: "900" },
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  h1: { color: colors.text, fontSize: 22, fontWeight: "900" },
 
   clearBtn: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: colors.border,
+    backgroundColor: "rgba(255,255,255,0.04)",
   },
-  clearText: { fontWeight: "800" },
+  clearText: { color: colors.text, fontWeight: "900" },
 
-  emptyBox: { marginTop: 30, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#ddd" },
-  emptyTitle: { fontWeight: "900", fontSize: 16 },
-  emptySub: { marginTop: 6, color: "#666" },
-
-  card: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 14,
+  itemCard: {
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: colors.border,
+    borderRadius: 18,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
   },
-  cardTop: { fontWeight: "900", marginBottom: 6 },
-  bold: { fontWeight: "900" },
-  line: { color: "#333", marginTop: 2 },
-  date: { marginTop: 8, color: "#666", fontSize: 12, fontWeight: "700" },
+  itemTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  itemTitle: { color: colors.text, fontWeight: "900" },
 
-  backBtn: {
+  pill: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  pillText: { color: colors.text, fontWeight: "900" },
+
+  itemSub: { color: colors.muted, marginTop: 8, fontWeight: "700" },
+  bold: { color: colors.text, fontWeight: "900" },
+
+  itemBottom: {
     marginTop: 12,
-    paddingVertical: 12,
-    borderRadius: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#444",
   },
-  backText: { color: "white", fontWeight: "900" },
+  tapHint: { color: colors.faint, fontWeight: "800" },
+
+  deleteBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.5)",
+    backgroundColor: "rgba(239,68,68,0.12)",
+  },
+  deleteText: { color: colors.text, fontWeight: "900" },
+
+  center: { flex: 1, justifyContent: "center", alignItems: "center", padding: spacing.lg },
+  loadingText: { color: colors.muted, marginTop: 10, fontWeight: "700" },
+
+  emptyTitle: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  emptySub: { color: colors.muted, marginTop: 6, textAlign: "center" },
+
+  primaryBtn: {
+    marginTop: spacing.lg,
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    backgroundColor: "rgba(124,58,237,0.85)",
+  },
+  primaryBtnText: { color: "#fff", fontWeight: "900" },
+
+  backBtn: { alignItems: "center", paddingVertical: 14 },
+  backText: { color: colors.faint, fontWeight: "900" },
 });
