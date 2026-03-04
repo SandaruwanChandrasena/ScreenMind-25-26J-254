@@ -39,6 +39,14 @@ import {
   debugDumpSleepTables, // optional
 } from "../services/sleepRepository";
 
+
+import { 
+  computeRiskScore, 
+  predictSleepRiskML,
+  buildFeaturesFromSessions
+} from "../services/sleepApiService";
+import { getLast7Sessions } from "../services/sleepRepository";
+
 import { computeDisruptionScore } from "../services/sleepScoring";
 
 function Card({ children, style }) {
@@ -117,12 +125,42 @@ export default function SleepHomeScreen({ navigation }) {
   };
 
   // ====== 2) Load dashboard summary ======
+  // const loadDashboard = useCallback(async () => {
+  //   setLoading(true);
+  //   try {
+  //     const latest = await getLatestCompletedSession(userId);
+  //     console.log("LATEST COMPLETED SESSION:", latest);
+
+  //     if (!latest) {
+  //       setLatestSummary(null);
+  //       setRiskResult(null);
+  //       return;
+  //     }
+
+  //     const summary = await getSessionSummary(latest.id);
+  //     console.log("LATEST SUMMARY:", summary);
+
+  //     if (!summary) {
+  //       setLatestSummary(null);
+  //       setRiskResult(null);
+  //       return;
+  //     }
+
+  //     const score = computeDisruptionScore(summary);
+  //     setLatestSummary(summary);
+  //     setRiskResult(score);
+  //   } catch (e) {
+  //     console.log("Sleep dashboard load error:", e);
+  //     Alert.alert("Error", "Failed to load sleep data.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [userId]);
+
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
       const latest = await getLatestCompletedSession(userId);
-      console.log("LATEST COMPLETED SESSION:", latest);
-
       if (!latest) {
         setLatestSummary(null);
         setRiskResult(null);
@@ -130,20 +168,65 @@ export default function SleepHomeScreen({ navigation }) {
       }
 
       const summary = await getSessionSummary(latest.id);
-      console.log("LATEST SUMMARY:", summary);
+      if (!summary) return;
 
-      if (!summary) {
-        setLatestSummary(null);
-        setRiskResult(null);
-        return;
+      setLatestSummary(summary);
+
+      // Try ML risk prediction first
+      let riskResult = null;
+      
+      const last7 = await getLast7Sessions(userId);
+      
+      if (last7 && last7.length === 7) {
+        // Build features for ML model
+        const features = buildFeaturesFromSessions(last7);
+        
+        // Call ML API
+        const mlResult = await predictSleepRiskML(features);
+        
+        if (mlResult) {
+          riskResult = {
+            score: mlResult.risk_score,
+            risk: mlResult.risk_category,
+            reasons: [],
+            source: 'ML Model',
+          };
+        }
       }
 
-      const score = computeDisruptionScore(summary);
-      setLatestSummary(summary);
-      setRiskResult(score);
+      // Fallback to rule-based if ML not available
+      if (!riskResult) {
+        const apiResult = await computeRiskScore({
+          screen_time_after_10pm: summary.screenOnCount * 8,
+          social_media_mins_night: summary.socialNotifCount * 5,
+          last_screen_off_hour: 
+            new Date(summary.end || Date.now()).getHours(),
+          unlock_count_night: summary.unlockCount,
+          notification_count_night: summary.nightNotifCount,
+          restlessness_score: 0,
+          snoring_duration_mins: summary.snoringTotalMinutes ?? 0,
+          sleep_quality_rating: summary.checkIn?.sleep_quality,
+        });
+
+        if (apiResult) {
+          riskResult = {
+            score: apiResult.risk_score,
+            risk: apiResult.risk_category,
+            reasons: apiResult.reasons,
+            breakdown: apiResult.breakdown,
+            source: 'Rule-Based',
+          };
+        } else {
+          // Last resort: local scoring
+          riskResult = computeDisruptionScore(summary);
+          riskResult.source = 'Local';
+        }
+      }
+
+      setRiskResult(riskResult);
+
     } catch (e) {
-      console.log("Sleep dashboard load error:", e);
-      Alert.alert("Error", "Failed to load sleep data.");
+      console.log("Dashboard load error:", e);
     } finally {
       setLoading(false);
     }

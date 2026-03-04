@@ -82,9 +82,17 @@ async function ensureTables(db) {
       z REAL,
       value REAL,
       ts INTEGER NOT NULL,
+      meta TEXT,
       FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
     );
   `);
+
+  // Migration: Add meta column if it doesn't exist
+  try {
+    await db.executeSql(`ALTER TABLE sensor_samples ADD COLUMN meta TEXT;`);
+  } catch (e) {
+    // Column already exists, ignore error
+  }
 
   await db.executeSql(`
     CREATE TABLE IF NOT EXISTS morning_checkins (

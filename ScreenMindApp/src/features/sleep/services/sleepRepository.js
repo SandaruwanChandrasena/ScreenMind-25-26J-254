@@ -512,6 +512,31 @@ export async function debugDumpSnoringTable() {
 }
 
 
+export async function getLast7Sessions(userId = null) {
+  const db = await getDB();
+
+  const query = userId == null
+    ? `SELECT * FROM sleep_sessions
+       WHERE end_time IS NOT NULL
+       ORDER BY end_time DESC
+       LIMIT 7;`
+    : `SELECT * FROM sleep_sessions
+       WHERE end_time IS NOT NULL AND user_id = ?
+       ORDER BY end_time DESC
+       LIMIT 7;`;
+
+  const rs = await exec(db, query, userId == null ? [] : [userId]);
+
+  const sessions = [];
+  for (let i = 0; i < rs.rows.length; i++) {
+    const row = rs.rows.item(i);
+    const summary = await getSessionSummary(row.id);
+    if (summary) sessions.push(summary);
+  }
+
+  return sessions;
+}
+
 export async function getLatestCompletedSession(userId = null) {
   const db = await getDB();
 
