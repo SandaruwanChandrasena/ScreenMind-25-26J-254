@@ -18,6 +18,17 @@ import { spacing } from "../../../theme/spacing";
 
 import { settingsAccess } from "../services/settingsAccess";
 
+///
+import { 
+  startSensorTracking, 
+  stopSensorTracking 
+} from "../services/sensorService";
+
+import { 
+  startSleepEventTracking, 
+  stopSleepEventTracking 
+} from "../services/sleepEventService";
+///
 import {
   getLatestCompletedSession,
   startSleepSession,
@@ -212,28 +223,54 @@ export default function SleepHomeScreen({ navigation }) {
   // }, [runningSessionId, userId]);
 
   // ====== 4) Start / Stop ======
+  // const onStartSession = async () => {
+  //   try {
+  //     if (runningSessionId) {
+  //       Alert.alert("Already running", "Sleep session is already active.");
+  //       return;
+  //     }
+
+  //     const sessionId = await startSleepSession({ userId });
+  //     console.log("Started sessionId:", sessionId);
+
+  //     // optional demo screen events (keep if you want)
+  //     await logScreenEvent({ userId, sessionId, eventType: "ON" });
+  //     await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+
+  //     setRunningSessionId(sessionId);
+
+  //     if (debugDumpSleepTables) await debugDumpSleepTables();
+
+  //     Alert.alert(
+  //       "Started ✅",
+  //       "Sleep session started. Now any new notifications will be logged automatically."
+  //     );
+  //   } catch (e) {
+  //     console.log("Start error:", e);
+  //     Alert.alert("Error", "Could not start session.");
+  //   }
+  // };
+
+
   const onStartSession = async () => {
     try {
       if (runningSessionId) {
-        Alert.alert("Already running", "Sleep session is already active.");
+        Alert.alert("Already running", 
+          "Sleep session is already active.");
         return;
       }
 
       const sessionId = await startSleepSession({ userId });
       console.log("Started sessionId:", sessionId);
 
-      // optional demo screen events (keep if you want)
-      await logScreenEvent({ userId, sessionId, eventType: "ON" });
-      await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+      // ── Start real event tracking ──
+      startSleepEventTracking(sessionId, userId);
+      startSensorTracking(sessionId, userId);
 
       setRunningSessionId(sessionId);
-
-      if (debugDumpSleepTables) await debugDumpSleepTables();
-
-      Alert.alert(
-        "Started ✅",
-        "Sleep session started. Now any new notifications will be logged automatically."
-      );
+      Alert.alert("Started ✅", 
+        "Sleep session started. Tracking unlocks, " +
+        "notifications and sensors now.");
     } catch (e) {
       console.log("Start error:", e);
       Alert.alert("Error", "Could not start session.");
@@ -243,31 +280,55 @@ export default function SleepHomeScreen({ navigation }) {
   const onStopSession = async () => {
     try {
       const sessionId = runningSessionId;
-
       if (!sessionId) {
-        Alert.alert("No active session", "Start a sleep session first.");
+        Alert.alert("No active session", 
+          "Start a sleep session first.");
         return;
       }
 
-      console.log("Stopping sessionId:", sessionId);
-
-      // optional demo end event
-      await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+      // ── Stop event tracking ──
+      stopSleepEventTracking();
+      stopSensorTracking();
 
       await stopSleepSession({ sessionId });
-
       setRunningSessionId(null);
-
-      if (debugDumpSleepTables) await debugDumpSleepTables();
-
       await loadDashboard();
-
-      Alert.alert("Stopped ✅", "Sleep session ended. Dashboard updated.");
+      Alert.alert("Stopped ✅", 
+        "Sleep session ended. Dashboard updated.");
     } catch (e) {
       console.log("Stop error:", e);
       Alert.alert("Error", "Could not stop session.");
     }
   };
+
+  // const onStopSession = async () => {
+  //   try {
+  //     const sessionId = runningSessionId;
+
+  //     if (!sessionId) {
+  //       Alert.alert("No active session", "Start a sleep session first.");
+  //       return;
+  //     }
+
+  //     console.log("Stopping sessionId:", sessionId);
+
+  //     // optional demo end event
+  //     await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+
+  //     await stopSleepSession({ sessionId });
+
+  //     setRunningSessionId(null);
+
+  //     if (debugDumpSleepTables) await debugDumpSleepTables();
+
+  //     await loadDashboard();
+
+  //     Alert.alert("Stopped ✅", "Sleep session ended. Dashboard updated.");
+  //   } catch (e) {
+  //     console.log("Stop error:", e);
+  //     Alert.alert("Error", "Could not stop session.");
+  //   }
+  // };
 
   // ====== 5) UI values ======
   const timeInBed = latestSummary ? msToHrsMins(latestSummary.durationMs) : "—";

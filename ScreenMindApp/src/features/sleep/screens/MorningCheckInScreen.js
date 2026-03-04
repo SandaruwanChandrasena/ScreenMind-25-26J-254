@@ -5,6 +5,11 @@ import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 
+import { 
+  saveMorningCheckIn, 
+  getLatestCompletedSession 
+} from "../services/sleepRepository";
+
 function SectionTitle({ title, sub }) {
   return (
     <View style={{ marginBottom: spacing.md }}>
@@ -80,9 +85,37 @@ export default function MorningCheckInScreen({ navigation }) {
   const [dryMouth, setDryMouth] = useState("No");
   const [snoreUsed, setSnoreUsed] = useState("No");
 
-  const submit = () => {
-    Alert.alert("Saved ✅", "Morning check-in recorded (UI only for now).");
-    navigation.goBack();
+  const submit = async () => {
+    try {
+      // Get the latest session to link check-in
+      const latest = await getLatestCompletedSession(null);
+      
+      if (!latest) {
+        Alert.alert("No session", 
+          "Complete a sleep session first.");
+        return;
+      }
+
+      await saveMorningCheckIn({
+        userId: null,
+        sessionId: latest.id,
+        sleepQuality: sleepQuality,
+        refreshed: refreshed,
+        wokeUp: wokeUp,
+        headache: headache,
+        dryMouth: dryMouth,
+        snoreUsed: snoreUsed,
+        ts: Date.now(),
+      });
+
+      Alert.alert("Saved ✅", 
+        "Morning check-in saved! Your sleep score has been updated.");
+      navigation.goBack();
+
+    } catch (e) {
+      console.log("Check-in save error:", e);
+      Alert.alert("Error", "Could not save check-in.");
+    }
   };
 
   const showPicker = (field) => {

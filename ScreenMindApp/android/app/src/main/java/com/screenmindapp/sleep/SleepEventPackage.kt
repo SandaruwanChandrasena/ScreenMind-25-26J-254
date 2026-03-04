@@ -9,7 +9,11 @@ import com.facebook.react.uimanager.ViewManager
 class SleepEventPackage : ReactPackage {
     override fun createNativeModules(
         reactContext: ReactApplicationContext
-    ): List<NativeModule> = listOf(SleepEventModule(reactContext))
+    ): List<NativeModule> = listOf(
+        SleepEventModule(reactContext),
+        SleepSensorModule(reactContext),
+        SnoringDetectionModule(reactContext)
+    )
 
     override fun createViewManagers(
         reactContext: ReactApplicationContext

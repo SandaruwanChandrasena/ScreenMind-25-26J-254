@@ -113,6 +113,34 @@ async function ensureTables(db) {
       updated_at INTEGER
     );
   `);
+
+  await db.executeSql(`
+    CREATE TABLE IF NOT EXISTS snoring_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      session_id INTEGER,
+      start_ts INTEGER NOT NULL,
+      end_ts INTEGER,
+      duration_seconds INTEGER,
+      intensity TEXT,
+      episode_count INTEGER DEFAULT 1,
+      FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
+    );
+  `);
+
+  await db.executeSql(`
+    CREATE TABLE IF NOT EXISTS snoring_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      session_id INTEGER,
+      started_at INTEGER NOT NULL,
+      stopped_at INTEGER,
+      total_episodes INTEGER DEFAULT 0,
+      total_duration_seconds INTEGER DEFAULT 0,
+      overall_intensity TEXT DEFAULT 'Mild',
+      FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
+    );
+  `);   
 }
 
 export async function getDB() {
