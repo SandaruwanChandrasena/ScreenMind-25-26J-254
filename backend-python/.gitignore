@@ -1,0 +1,27 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Environment Variables
+.env
+
+# Firebase Secret
+firebase_service_account.json
+serviceAccountKey.json
+
+# AI Model files (too large for GitHub - 440MB)
+app/api/v1/c4_social_media/nlp/ScreenMind_model/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
