@@ -7,7 +7,7 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
-  NativeEventEmitter,
+  // NativeEventEmitter,
   NativeModules,
 } from "react-native";
 
@@ -18,6 +18,17 @@ import { spacing } from "../../../theme/spacing";
 
 import { settingsAccess } from "../services/settingsAccess";
 
+///
+import { 
+  startSensorTracking, 
+  stopSensorTracking 
+} from "../services/sensorService";
+
+import { 
+  startSleepEventTracking, 
+  stopSleepEventTracking 
+} from "../services/sleepEventService";
+///
 import {
   getLatestCompletedSession,
   startSleepSession,
@@ -145,95 +156,121 @@ export default function SleepHomeScreen({ navigation }) {
   const isRunning = !!runningSessionId;
 
   // ====== 3) STEP 4: Listen for native notifications and save to SQLite ======
-  useEffect(() => {
-    const { NotificationBridge } = NativeModules;
+  // useEffect(() => {
+  //   const { NotificationBridge } = NativeModules;
 
-    if (!NotificationBridge) {
-      console.log(
-        "⚠️ NativeModules.NotificationBridge not found. Check NotificationBridgePackage is added + rebuild."
-      );
-      return;
-    }
+  //   if (!NotificationBridge) {
+  //     console.log(
+  //       "⚠️ NativeModules.NotificationBridge not found. Check NotificationBridgePackage is added + rebuild."
+  //     );
+  //     return;
+  //   }
 
-    // Test if module is loaded
-    console.log("✅ NotificationBridge module found");
-    NotificationBridge.testModule();
+  //   // Test if module is loaded
+  //   console.log("✅ NotificationBridge module found");
+  //   NotificationBridge.testModule();
 
-    const emitter = new NativeEventEmitter(NotificationBridge);
+  //   const emitter = new NativeEventEmitter(NotificationBridge);
 
-    const sub = emitter.addListener("SCREENMIND_NOTIFICATION", async (event) => {
-      try {
-        console.log("📱 Received notification event:", event);
+  //   const sub = emitter.addListener("SCREENMIND_NOTIFICATION", async (event) => {
+  //     try {
+  //       console.log("📱 Received notification event:", event);
         
-        // event expected: { packageName, title, ts }
-        const packageName = event?.packageName ?? null;
-        const title = event?.title ?? null;
-        const ts = event?.ts ?? Date.now();
+  //       // event expected: { packageName, title, ts }
+  //       const packageName = event?.packageName ?? null;
+  //       const title = event?.title ?? null;
+  //       const ts = event?.ts ?? Date.now();
 
-        // If session isn't running, ignore OR you can store as sessionId=null
-        if (!runningSessionId) {
-          console.log("⚠️ No running session, notification ignored");
-          // If you want to keep all notifications even without session, uncomment:
-          // await logNotificationEvent({ userId, sessionId: null, packageName, title, ts });
-          return;
-        }
+  //       // If session isn't running, ignore OR you can store as sessionId=null
+  //       if (!runningSessionId) {
+  //         console.log("⚠️ No running session, notification ignored");
+  //         // If you want to keep all notifications even without session, uncomment:
+  //         // await logNotificationEvent({ userId, sessionId: null, packageName, title, ts });
+  //         return;
+  //       }
 
-        // Optional duplicate guard (package + title + ts)
-        const key = `${packageName || ""}|${title || ""}|${ts}`;
-        if (lastNotifKeyRef.current === key) return;
-        lastNotifKeyRef.current = key;
+  //       // Optional duplicate guard (package + title + ts)
+  //       const key = `${packageName || ""}|${title || ""}|${ts}`;
+  //       if (lastNotifKeyRef.current === key) return;
+  //       lastNotifKeyRef.current = key;
 
-        await logNotificationEvent({
-          userId,
-          sessionId: runningSessionId,
-          packageName,
-          title,
-          ts,
-        });
+  //       await logNotificationEvent({
+  //         userId,
+  //         sessionId: runningSessionId,
+  //         packageName,
+  //         title,
+  //         ts,
+  //       });
 
-        // For debugging
-        console.log("✅ Saved notification to SQLite:", {
-          runningSessionId,
-          packageName,
-          title,
-          ts,
-        });
+  //       // For debugging
+  //       console.log("✅ Saved notification to SQLite:", {
+  //         runningSessionId,
+  //         packageName,
+  //         title,
+  //         ts,
+  //       });
 
-        // Optional: dump tables
-        // if (debugDumpSleepTables) await debugDumpSleepTables();
-      } catch (e) {
-        console.log("❌ Failed to save native notification event:", e);
-      }
-    });
+  //       // Optional: dump tables
+  //       // if (debugDumpSleepTables) await debugDumpSleepTables();
+  //     } catch (e) {
+  //       console.log("❌ Failed to save native notification event:", e);
+  //     }
+  //   });
 
-    return () => {
-      sub.remove();
-    };
-  }, [runningSessionId, userId]);
+  //   return () => {
+  //     sub.remove();
+  //   };
+  // }, [runningSessionId, userId]);
 
   // ====== 4) Start / Stop ======
+  // const onStartSession = async () => {
+  //   try {
+  //     if (runningSessionId) {
+  //       Alert.alert("Already running", "Sleep session is already active.");
+  //       return;
+  //     }
+
+  //     const sessionId = await startSleepSession({ userId });
+  //     console.log("Started sessionId:", sessionId);
+
+  //     // optional demo screen events (keep if you want)
+  //     await logScreenEvent({ userId, sessionId, eventType: "ON" });
+  //     await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+
+  //     setRunningSessionId(sessionId);
+
+  //     if (debugDumpSleepTables) await debugDumpSleepTables();
+
+  //     Alert.alert(
+  //       "Started ✅",
+  //       "Sleep session started. Now any new notifications will be logged automatically."
+  //     );
+  //   } catch (e) {
+  //     console.log("Start error:", e);
+  //     Alert.alert("Error", "Could not start session.");
+  //   }
+  // };
+
+
   const onStartSession = async () => {
     try {
       if (runningSessionId) {
-        Alert.alert("Already running", "Sleep session is already active.");
+        Alert.alert("Already running", 
+          "Sleep session is already active.");
         return;
       }
 
       const sessionId = await startSleepSession({ userId });
       console.log("Started sessionId:", sessionId);
 
-      // optional demo screen events (keep if you want)
-      await logScreenEvent({ userId, sessionId, eventType: "ON" });
-      await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+      // ── Start real event tracking ──
+      startSleepEventTracking(sessionId, userId);
+      startSensorTracking(sessionId, userId);
 
       setRunningSessionId(sessionId);
-
-      if (debugDumpSleepTables) await debugDumpSleepTables();
-
-      Alert.alert(
-        "Started ✅",
-        "Sleep session started. Now any new notifications will be logged automatically."
-      );
+      Alert.alert("Started ✅", 
+        "Sleep session started. Tracking unlocks, " +
+        "notifications and sensors now.");
     } catch (e) {
       console.log("Start error:", e);
       Alert.alert("Error", "Could not start session.");
@@ -243,31 +280,55 @@ export default function SleepHomeScreen({ navigation }) {
   const onStopSession = async () => {
     try {
       const sessionId = runningSessionId;
-
       if (!sessionId) {
-        Alert.alert("No active session", "Start a sleep session first.");
+        Alert.alert("No active session", 
+          "Start a sleep session first.");
         return;
       }
 
-      console.log("Stopping sessionId:", sessionId);
-
-      // optional demo end event
-      await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+      // ── Stop event tracking ──
+      stopSleepEventTracking();
+      stopSensorTracking();
 
       await stopSleepSession({ sessionId });
-
       setRunningSessionId(null);
-
-      if (debugDumpSleepTables) await debugDumpSleepTables();
-
       await loadDashboard();
-
-      Alert.alert("Stopped ✅", "Sleep session ended. Dashboard updated.");
+      Alert.alert("Stopped ✅", 
+        "Sleep session ended. Dashboard updated.");
     } catch (e) {
       console.log("Stop error:", e);
       Alert.alert("Error", "Could not stop session.");
     }
   };
+
+  // const onStopSession = async () => {
+  //   try {
+  //     const sessionId = runningSessionId;
+
+  //     if (!sessionId) {
+  //       Alert.alert("No active session", "Start a sleep session first.");
+  //       return;
+  //     }
+
+  //     console.log("Stopping sessionId:", sessionId);
+
+  //     // optional demo end event
+  //     await logScreenEvent({ userId, sessionId, eventType: "UNLOCK" });
+
+  //     await stopSleepSession({ sessionId });
+
+  //     setRunningSessionId(null);
+
+  //     if (debugDumpSleepTables) await debugDumpSleepTables();
+
+  //     await loadDashboard();
+
+  //     Alert.alert("Stopped ✅", "Sleep session ended. Dashboard updated.");
+  //   } catch (e) {
+  //     console.log("Stop error:", e);
+  //     Alert.alert("Error", "Could not stop session.");
+  //   }
+  // };
 
   // ====== 5) UI values ======
   const timeInBed = latestSummary ? msToHrsMins(latestSummary.durationMs) : "—";
@@ -431,6 +492,14 @@ export default function SleepHomeScreen({ navigation }) {
         <PrimaryButton
           title="Data & Permissions"
           onPress={() => navigation.navigate("SleepPermissions")}
+          style={{ backgroundColor: "rgba(255,255,255,0.10)" }}
+        />
+
+        <View style={{ height: spacing.sm }} />
+
+        <PrimaryButton
+          title="⚙️ Sleep Schedule"
+          onPress={() => navigation.navigate("SleepSchedule")}
           style={{ backgroundColor: "rgba(255,255,255,0.10)" }}
         />
 

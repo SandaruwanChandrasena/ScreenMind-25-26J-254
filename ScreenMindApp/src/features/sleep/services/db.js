@@ -33,6 +33,18 @@ async function ensureTables(db) {
     );
   `);
 
+  // await db.executeSql(`
+  //   CREATE TABLE IF NOT EXISTS notification_events (
+  //     id INTEGER PRIMARY KEY AUTOINCREMENT,
+  //     user_id TEXT,
+  //     session_id INTEGER,
+  //     package_name TEXT,
+  //     title TEXT,
+  //     ts INTEGER NOT NULL,
+  //     FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
+  //   );
+  // `);
+
   await db.executeSql(`
     CREATE TABLE IF NOT EXISTS notification_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,9 +53,23 @@ async function ensureTables(db) {
       package_name TEXT,
       title TEXT,
       ts INTEGER NOT NULL,
+      is_night INTEGER DEFAULT 0,
+      is_social_media INTEGER DEFAULT 0,
       FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
     );
   `);
+
+  // Migration: Add missing columns if they don't exist
+  try {
+    await db.executeSql(`ALTER TABLE notification_events ADD COLUMN is_night INTEGER DEFAULT 0;`);
+  } catch (e) {
+    // Column already exists, ignore error
+  }
+  try {
+    await db.executeSql(`ALTER TABLE notification_events ADD COLUMN is_social_media INTEGER DEFAULT 0;`);
+  } catch (e) {
+    // Column already exists, ignore error
+  }
 
   await db.executeSql(`
     CREATE TABLE IF NOT EXISTS sensor_samples (
@@ -75,6 +101,46 @@ async function ensureTables(db) {
       FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
     );
   `);
+
+  await db.executeSql(`
+    CREATE TABLE IF NOT EXISTS user_sleep_settings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      bedtime_hour INTEGER DEFAULT 21,
+      bedtime_minute INTEGER DEFAULT 0,
+      waketime_hour INTEGER DEFAULT 9,
+      waketime_minute INTEGER DEFAULT 0,
+      updated_at INTEGER
+    );
+  `);
+
+  await db.executeSql(`
+    CREATE TABLE IF NOT EXISTS snoring_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      session_id INTEGER,
+      start_ts INTEGER NOT NULL,
+      end_ts INTEGER,
+      duration_seconds INTEGER,
+      intensity TEXT,
+      episode_count INTEGER DEFAULT 1,
+      FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
+    );
+  `);
+
+  await db.executeSql(`
+    CREATE TABLE IF NOT EXISTS snoring_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      session_id INTEGER,
+      started_at INTEGER NOT NULL,
+      stopped_at INTEGER,
+      total_episodes INTEGER DEFAULT 0,
+      total_duration_seconds INTEGER DEFAULT 0,
+      overall_intensity TEXT DEFAULT 'Mild',
+      FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
+    );
+  `);   
 }
 
 export async function getDB() {

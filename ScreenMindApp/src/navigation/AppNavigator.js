@@ -48,6 +48,7 @@ import MorningCheckInScreen from "../features/sleep/screens/MorningCheckInScreen
 import SleepDetailsScreen from "../features/sleep/screens/SleepDetailsScreen";
 import DataPermissionsScreen from "../features/sleep/screens/DataPermissionsScreen";
 import SnoringScreen from "../features/sleep/screens/SnoringScreen";
+import SleepScheduleScreen from "../features/sleep/screens/SleepScheduleScreen";
 
 /* ========================= */
 /* ✅ Screen Usage (ScreenLogs) Screens */
@@ -257,6 +258,10 @@ export default function AppNavigator() {
               name="SleepSnoring"
               component={SnoringScreen}
               options={{ title: "Snoring" }}
+            />
+            <Stack.Screen
+              name="SleepSchedule"
+              component={SleepScheduleScreen}
             />
 
             {/* ========================= */}
