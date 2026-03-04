@@ -1,4 +1,4 @@
-# ScreenMind — Backend Python Setup Guide
+ ScreenMind — Backend Python Setup Guide
 
 > 📌 Read this fully before starting. Follow every step in order.
 
@@ -28,11 +28,59 @@ Place this file directly inside the `backend-python/` folder once you receive it
 
 ---
 
+## 🤖 Model Setup — Download Fine-tuned AI Model
+
+> ⚠️ The AI model is NOT included in GitHub (too large — 440MB).  
+> You must download it manually from Google Drive.
+
+
+### Step 1 — Download the model folder
+Download the `ScreenMind_model` folder from Google Drive:
+
+```
+https://drive.google.com/drive/folders/ScreenMind_model
+```
+> 📌 Ask the project leader for the exact Google Drive link.
+
+---
+
+### Step 2 — Place the model in the correct folder
+
+After downloading, extract and place the folder here:
+
+```
+backend-python/
+└── app/
+    └── api/
+        └── v1/
+            └── c4_social_media/
+                └── nlp/
+                    └── ScreenMind_model/   ← place HERE
+                        ├── config.json
+                        ├── model.safetensors
+                        ├── tokenizer_config.json
+                        └── tokenizer.json
+```
+
+✅ Your `nlp/` folder should look like this in VS Code:
+```
+nlp/
+├── ScreenMind_model/
+│   ├── config.json
+│   ├── model.safetensors
+│   ├── tokenizer_config.json
+│   └── tokenizer.json
+├── emoji_masking.py
+└── roberta_model.py
+```
+
+---
+
 ## 🚀 Setup — Step by Step
 
 ### Step 1 — Clone the repository
 ```powershell
-git clone <your-github-repo-url>
+git clone 
 cd ScreenMind-25-26J-254/backend-python
 ```
 
@@ -101,6 +149,9 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
 INFO:     Started reloader process
+⏳ Loading your fine-tuned ScreenMind model...
+✅ ScreenMind model loaded successfully!
+INFO:     Application startup complete.
 ```
 
 ---
@@ -163,6 +214,14 @@ Ask the project leader to send you the firebase_service_account.json file.
 Place it inside the backend-python/ folder.
 ```
 
+### ❌ `ScreenMind_model not found` or model loading error
+```
+You forgot to download the AI model!
+Follow the "Model Setup" section at the top of this README.
+Download from Google Drive and place in:
+app/api/v1/c4_social_media/nlp/ScreenMind_model/
+```
+
 ### ❌ PowerShell says "running scripts is disabled"
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
@@ -189,6 +248,7 @@ backend-python/
             ├── c3_sleep/             ← C3 Member's folder
             ├── c4_social_media/      ← C4 Leader's folder
             │   └── nlp/
+            │       ├── ScreenMind_model/  ← Download from Google Drive
             │       ├── roberta_model.py
             │       └── emoji_masking.py
             └── fusion/               ← Final score combination
@@ -202,5 +262,5 @@ If you face any issues, contact the **project leader (C4)** before changing any 
 
 ---
 
-*ScreenMind — AI-Based Mental Health Detection System*
+*ScreenMind — AI-Based Mental Health Detection System*  
 *Academic Year 2025/2026*
