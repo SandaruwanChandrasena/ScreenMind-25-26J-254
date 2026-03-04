@@ -10,7 +10,7 @@ env/
 firebase_service_account.json
 serviceAccountKey.json
 
-# AI Model files (too large for GitHub - 440MB)
+# AI Model files (too large for GitHub ~ 475MB)
 app/api/v1/c4_social_media/nlp/ScreenMind_model/
 
 # Python cache
