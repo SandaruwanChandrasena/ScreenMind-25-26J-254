@@ -13,6 +13,7 @@ import com.screenmindapp.isolation.ServiceStarterPackage
 import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
+import com.screenmindapp.sleep.SleepEventPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -28,6 +29,7 @@ class MainApplication : Application(), ReactApplication {
           add(IsolationMetricsPackage())
           add(BehaviourMetricsPackage())
           add(CommunicationStatsPackage())
+          add(SleepEventPackage())
 
           // Packages that cannot be autolinked yet can be added manually here
         },

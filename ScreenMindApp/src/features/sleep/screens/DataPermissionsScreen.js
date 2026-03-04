@@ -169,23 +169,40 @@ export default function DataPermissionsScreen() {
   }
 
   // ✅ UPDATED: Prefer native intents
+  // async function openNotificationAccessSettings() {
+  //   try {
+  //     if (settingsAccess?.openNotificationAccessSettings) {
+  //       await settingsAccess.openNotificationAccessSettings();
+  //       Alert.alert("Tip", "After enabling, come back and press Re-check.");
+  //       return;
+  //     }
+  //     // fallback
+  //     await Linking.openURL("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
+  //     Alert.alert("Tip", "After enabling, come back and press Re-check.");
+  //   } catch {
+  //     Alert.alert(
+  //       "Not supported",
+  //       "Could not open Notification Access settings on this device.\n\nOpen manually:\nSettings → Apps → Special access → Notification access"
+  //     );
+  //   }
+  // }
+
   async function openNotificationAccessSettings() {
-    try {
-      if (settingsAccess?.openNotificationAccessSettings) {
-        await settingsAccess.openNotificationAccessSettings();
-        Alert.alert("Tip", "After enabling, come back and press Re-check.");
-        return;
-      }
-      // fallback
-      await Linking.openURL("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS");
-      Alert.alert("Tip", "After enabling, come back and press Re-check.");
-    } catch {
-      Alert.alert(
-        "Not supported",
-        "Could not open Notification Access settings on this device.\n\nOpen manually:\nSettings → Apps → Special access → Notification access"
-      );
-    }
+  try {
+    settingsAccess.openNotificationAccessSettings();
+    Alert.alert(
+      "Tip",
+      "After enabling ScreenMind in the list, " +
+      "come back and press Re-check."
+    );
+  } catch (e) {
+    Alert.alert(
+      "Not supported",
+      "Open manually:\nSettings → Apps → " +
+      "Special access → Notification access"
+    );
   }
+}
 
   // ✅ UPDATED: This fixes your DND “Not supported”
   async function openDndAccessSettings() {

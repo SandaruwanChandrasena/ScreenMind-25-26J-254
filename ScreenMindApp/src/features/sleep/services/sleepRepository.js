@@ -93,20 +93,44 @@ export async function logScreenEvent({ userId = null, sessionId = null, eventTyp
 /**
  * Insert notification event
  */
+// export async function logNotificationEvent({
+//   userId = null,
+//   sessionId = null,
+//   packageName = null,
+//   title = null,
+//   ts = Date.now(),
+// }) {
+//   const db = await getDB();
+
+//   await exec(
+//     db,
+//     `INSERT INTO notification_events (user_id, session_id, package_name, title, ts)
+//      VALUES (?, ?, ?, ?, ?);`,
+//     [userId, sessionId, packageName, title, ts]
+//   );
+
+//   return true;
+// }
+
 export async function logNotificationEvent({
   userId = null,
   sessionId = null,
   packageName = null,
   title = null,
   ts = Date.now(),
+  isNight = 0,         // ← NEW
+  isSocialMedia = 0,   // ← NEW
 }) {
   const db = await getDB();
 
   await exec(
     db,
-    `INSERT INTO notification_events (user_id, session_id, package_name, title, ts)
-     VALUES (?, ?, ?, ?, ?);`,
-    [userId, sessionId, packageName, title, ts]
+    `INSERT INTO notification_events 
+     (user_id, session_id, package_name, title, 
+      ts, is_night, is_social_media)
+     VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [userId, sessionId, packageName, title,
+     ts, isNight, isSocialMedia]
   );
 
   return true;
