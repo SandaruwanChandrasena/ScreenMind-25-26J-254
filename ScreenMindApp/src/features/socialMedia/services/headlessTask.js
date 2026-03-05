@@ -1,10 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { PYTHON_BACKEND_URL } from '@env';
-import notifee, { AndroidImportance } from '@notifee/react-native';
 
 // ─────────────────────────────────────────────
-// ✅ WHITELIST — only these apps are monitored
+// ✅ WHITELIST
 // ─────────────────────────────────────────────
 const SOCIAL_APP_WHITELIST = [
   'com.whatsapp',
@@ -13,7 +12,6 @@ const SOCIAL_APP_WHITELIST = [
   'com.zhiliaoapp.musically',
 ];
 
-// Friendly names for console output
 const APP_NAMES = {
   'com.whatsapp': 'WhatsApp',
   'com.facebook.katana': 'Messenger',
@@ -22,12 +20,14 @@ const APP_NAMES = {
 };
 
 // ─────────────────────────────────────────────
-// ✅ SLIDING WINDOW BUFFER — size 5
+// ✅ CONSTANTS
 // ─────────────────────────────────────────────
 const BUFFER_SIZE = 5;
 const BUFFER_KEY = 'sm_message_buffer';
-const HIGH_THRESHOLD = 0.7; // above this = HIGH risk
-const MED_THRESHOLD = 0.4; // above this = MODERATE risk
+const COOLDOWN_KEY = 'sm_alert_cooldown';
+const OVERLAY_KEY = 'sm_overlay_trigger';
+const HIGH_THRESHOLD = 0.7;
+const MED_THRESHOLD = 0.4;
 
 // ─────────────────────────────────────────────
 // ✅ PRIVACY FILTER
@@ -41,7 +41,7 @@ function sanitizeText(raw = '') {
 }
 
 // ─────────────────────────────────────────────
-// ✅ SEND ONE MESSAGE TO ROBERTA BACKEND
+// ✅ SEND ONE MESSAGE TO BACKEND
 // ─────────────────────────────────────────────
 async function analyzeOneMessage(cleanedText, appSource) {
   try {
@@ -54,7 +54,7 @@ async function analyzeOneMessage(cleanedText, appSource) {
         timestamp: new Date().toISOString(),
       },
     );
-    return response.data; // { sentiment: { label, score }, ... }
+    return response.data;
   } catch (error) {
     console.log('❌ Backend Error:', error.message);
     return null;
@@ -62,7 +62,7 @@ async function analyzeOneMessage(cleanedText, appSource) {
 }
 
 // ─────────────────────────────────────────────
-// ✅ EMOJI HELPER for console output
+// ✅ EMOJI HELPER
 // ─────────────────────────────────────────────
 function sentimentEmoji(label) {
   if (label === 'Negative') return '😡';
@@ -71,7 +71,7 @@ function sentimentEmoji(label) {
 }
 
 // ─────────────────────────────────────────────
-// ✅ PRINT QUEUE — clean console output
+// ✅ PRINT QUEUE
 // ─────────────────────────────────────────────
 function printQueue(buffer, avgScore, riskLevel) {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -81,7 +81,7 @@ function printQueue(buffer, avgScore, riskLevel) {
     const appName = APP_NAMES[item.app] || item.app;
     const emoji = sentimentEmoji(item.label);
     const score =
-      typeof item.score === 'number' ? item.score.toFixed(2) : '?.??';
+      typeof item.score === 'number' ? item.score.toFixed(2) : '0.00';
     console.log(
       `  [${index + 1}] ${appName.padEnd(10)} → "${item.text}"`.padEnd(55) +
         `${emoji} ${item.label} (${score})`,
@@ -90,56 +90,49 @@ function printQueue(buffer, avgScore, riskLevel) {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`📊 Average Risk Score : ${avgScore.toFixed(2)}`);
   console.log(`🎯 Risk Level         : ${riskLevel}`);
-  if (riskLevel === 'HIGH') {
-    console.log('🚨 WARNING SENT TO USER!');
-  }
+  if (riskLevel === 'HIGH') console.log('🚨 OVERLAY TRIGGERED!');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 }
 
 // ─────────────────────────────────────────────
-// ✅ SEND WARNING NOTIFICATION TO USER
+// ✅ CHECK COOLDOWN
 // ─────────────────────────────────────────────
-async function sendWarningNotification(avgScore, riskLevel) {
+async function isCooldownActive() {
   try {
-    // Create notification channel (required for Android)
-    await notifee.createChannel({
-      id: 'screenmind_alerts',
-      name: 'ScreenMind Alerts',
-      importance: AndroidImportance.HIGH,
-      sound: 'default',
-    });
+    const raw = await AsyncStorage.getItem(COOLDOWN_KEY);
+    if (!raw) return false;
+    const { until } = JSON.parse(raw);
+    if (Date.now() < until) {
+      const minsLeft = Math.ceil((until - Date.now()) / 60000);
+      console.log(`⏳ Cooldown active — ${minsLeft} min(s) remaining`);
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
 
-    const messages = {
-      HIGH: {
-        title: '⚠️ ScreenMind Alert',
-        body: `High emotional stress detected (score: ${avgScore.toFixed(
-          2,
-        )}). Please take a break and breathe. 💙`,
-      },
-      MODERATE: {
-        title: '🟡 ScreenMind Notice',
-        body: `Moderate stress detected (score: ${avgScore.toFixed(
-          2,
-        )}). Consider stepping away for a moment. 😊`,
-      },
-    };
-
-    const msg = messages[riskLevel];
-    if (!msg) return; // LOW risk → no notification
-
-    await notifee.displayNotification({
-      title: msg.title,
-      body: msg.body,
-      android: {
-        channelId: 'screenmind_alerts',
-        importance: AndroidImportance.HIGH,
-        pressAction: { id: 'default' },
-      },
-    });
-
-    console.log(`📱 Notification sent: ${riskLevel}`);
-  } catch (error) {
-    console.log('❌ Notification Error:', error.message);
+// ─────────────────────────────────────────────
+// ✅ TRIGGER OVERLAY
+// Saves to AsyncStorage → screen reads and shows overlay
+// ─────────────────────────────────────────────
+async function triggerOverlay(avgScore, riskLevel) {
+  try {
+    await AsyncStorage.setItem(
+      OVERLAY_KEY,
+      JSON.stringify({
+        show: true,
+        risk_score: avgScore,
+        risk_level: riskLevel,
+        timestamp: new Date().toISOString(),
+      }),
+    );
+    console.log(
+      `📲 Overlay trigger saved → ${riskLevel} (${avgScore.toFixed(2)})`,
+    );
+  } catch (e) {
+    console.log('❌ Overlay trigger error:', e);
   }
 }
 
@@ -150,7 +143,7 @@ export default async function headlessTask({ notification }) {
   if (!notification) return;
 
   try {
-    // 1️⃣ Parse notification
+    // 1️⃣ Parse
     const parsed =
       typeof notification === 'string'
         ? JSON.parse(notification)
@@ -165,11 +158,11 @@ export default async function headlessTask({ notification }) {
       return;
     }
 
-    // 3️⃣ Sanitize text
+    // 3️⃣ Sanitize
     const cleanedText = sanitizeText(text);
     if (!cleanedText) return;
 
-    // ✅ Filter out WhatsApp summary notifications
+    // 4️⃣ Filter summaries
     if (/^\d+\s+new\s+messages?$/i.test(cleanedText)) {
       console.log(`🚫 Filtered summary: "${cleanedText}"`);
       return;
@@ -178,51 +171,42 @@ export default async function headlessTask({ notification }) {
     const appName = APP_NAMES[pkg] || pkg;
     console.log(`✅ Accepted: [${appName}] → "${cleanedText}"`);
 
-    // 4️⃣ Send ONE message to backend → get score
+    // 5️⃣ Send to backend
     const result = await analyzeOneMessage(cleanedText, pkg);
     if (!result) return;
 
-    // 🔍 DEBUG — see exact backend response
-    console.log('🔍 RAW RESULT:', JSON.stringify(result));
-
+    // 6️⃣ Extract score
     const label = result.sentiment?.label || 'Neutral';
     const score = parseFloat(result.sentiment?.negative) / 100 || 0.0;
+    console.log(`🔍 label=${label}, score=${score.toFixed(2)}`);
 
-    console.log(`🔍 label=${label}, score=${score}`);
-
-    // 5️⃣ Load existing buffer from AsyncStorage
+    // 7️⃣ Load & clean buffer
     const raw = await AsyncStorage.getItem(BUFFER_KEY);
     let buffer = raw ? JSON.parse(raw) : [];
-
-    // ✅ Clear any old buffer items that have no valid score
     buffer = buffer.filter(
       item => item.score !== undefined && item.score !== null,
     );
 
-    // 6️⃣ Add new message to buffer (sliding window)
+    // 8️⃣ Sliding window
     buffer.push({
       app: pkg,
       text: cleanedText,
-      label: label,
-      score: score,
+      label,
+      score,
       time: new Date().toISOString(),
     });
+    if (buffer.length > BUFFER_SIZE) buffer = buffer.slice(-BUFFER_SIZE);
 
-    // Keep only LAST 5 messages (sliding window)
-    if (buffer.length > BUFFER_SIZE) {
-      buffer = buffer.slice(-BUFFER_SIZE); // drop oldest
-    }
-
-    // 7️⃣ Save updated buffer
+    // 9️⃣ Save buffer
     await AsyncStorage.setItem(BUFFER_KEY, JSON.stringify(buffer));
 
-    // 8️⃣ Only analyze when buffer is full (5 messages)
+    // Wait for full buffer
     if (buffer.length < BUFFER_SIZE) {
       console.log(`📥 Buffer filling: [${buffer.length}/${BUFFER_SIZE}]`);
       return;
     }
 
-    // 9️⃣ Calculate average risk score (safely handle undefined scores)
+    // 🔟 Average score
     const validScores = buffer.map(item =>
       typeof item.score === 'number' ? item.score : 0,
     );
@@ -231,20 +215,23 @@ export default async function headlessTask({ notification }) {
       `🔢 Scores: [${validScores.map(s => s.toFixed(2)).join(', ')}]`,
     );
 
-    // 🔟 Determine risk level
+    // 1️⃣1️⃣ Risk level
     let riskLevel = 'LOW';
     if (avgScore >= HIGH_THRESHOLD) riskLevel = 'HIGH';
     else if (avgScore >= MED_THRESHOLD) riskLevel = 'MODERATE';
 
-    // 1️⃣1️⃣ Print clean queue to console
+    // 1️⃣2️⃣ Print queue
     printQueue(buffer, avgScore, riskLevel);
 
-    // 1️⃣2️⃣ Send warning notification if HIGH or MODERATE
-    if (riskLevel === 'HIGH' || riskLevel === 'MODERATE') {
-      await sendWarningNotification(avgScore, riskLevel);
+    // 1️⃣3️⃣ Trigger overlay only for HIGH + no cooldown
+    if (riskLevel === 'HIGH') {
+      const onCooldown = await isCooldownActive();
+      if (!onCooldown) {
+        await triggerOverlay(avgScore, riskLevel);
+      }
     }
 
-    // 1️⃣3️⃣ Save analysis result to AsyncStorage (for dashboard)
+    // 1️⃣4️⃣ Save analysis
     await AsyncStorage.setItem(
       'latest_sm_analysis',
       JSON.stringify({
@@ -257,9 +244,7 @@ export default async function headlessTask({ notification }) {
     );
 
     console.log(
-      `💾 Saved to AsyncStorage: risk_score=${avgScore.toFixed(
-        2,
-      )}, level=${riskLevel}`,
+      `💾 Saved: risk_score=${avgScore.toFixed(2)}, level=${riskLevel}`,
     );
   } catch (error) {
     console.log('❌ Headless Task Error:', error);

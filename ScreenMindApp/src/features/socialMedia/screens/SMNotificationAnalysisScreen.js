@@ -14,14 +14,10 @@ import { spacing } from '../../../theme/spacing';
 import SMSectionTitle from '../components/SMSectionTitle';
 import SMMiniCard from '../components/SMMiniCard';
 import SMPrivacyStatusCard from '../components/SMPrivacyStatusCard';
-
-// ✅ Notification permission service
 import {
   isNotificationAccessEnabled,
   openNotificationAccessSettings,
 } from '../services/notificationListener.service';
-
-// ✅ Alert threshold settings service
 import {
   loadAlertSettings,
   saveAlertSettings,
@@ -31,26 +27,18 @@ import {
 } from '../services/smSettings.service';
 
 export default function SMNotificationAnalysisScreen() {
-
-  // ─── Notification Permission ──────────────────────────────────
   const [notifAccessEnabled, setNotifAccessEnabled] = useState(false);
-
-  // ─── App Monitor Toggles ──────────────────────────────────────
   const [monitorWhatsApp, setMonitorWhatsApp] = useState(true);
   const [monitorMessenger, setMonitorMessenger] = useState(false);
   const [monitorInstagram, setMonitorInstagram] = useState(false);
   const [alertHighRisk, setAlertHighRisk] = useState(true);
   const [dailyJournalReminder, setDailyJournalReminder] = useState(false);
-
-  // ─── Alert Threshold Settings ─────────────────────────────────
   const [sensitivity, setSensitivity] = useState('Medium');
   const [negativeCount, setNegativeCount] = useState(5);
   const [timeWindowMins, setTimeWindowMins] = useState(5);
 
-  // ─── Summary (static for now) ─────────────────────────────────
   const overallTone = 'Mixed';
   const tone = 'high';
-
   const toneConfig = {
     low: {
       bg: 'rgba(34,197,94,0.18)',
@@ -68,34 +56,29 @@ export default function SMNotificationAnalysisScreen() {
       label: 'Higher negative signals detected today.',
     },
   };
-
   const toneUI = toneConfig[tone];
+  const statusUI = useMemo(
+    () =>
+      notifAccessEnabled
+        ? { label: 'ON', bg: 'rgba(34,197,94,0.16)', text: '#22C55E' }
+        : { label: 'OFF', bg: 'rgba(239,68,68,0.14)', text: '#EF4444' },
+    [notifAccessEnabled],
+  );
 
-  const statusUI = useMemo(() => {
-    return notifAccessEnabled
-      ? { label: 'ON', bg: 'rgba(34,197,94,0.16)', text: '#22C55E' }
-      : { label: 'OFF', bg: 'rgba(239,68,68,0.14)', text: '#EF4444' };
-  }, [notifAccessEnabled]);
-
-  // ─── Check notification permission on load ────────────────────
+  // ── Check notification permission ────────────────────────────
   useEffect(() => {
     const checkPermission = async () => {
       const isGranted = await isNotificationAccessEnabled();
       setNotifAccessEnabled(isGranted);
     };
-
     checkPermission();
-
     const subscription = AppState.addEventListener('change', nextAppState => {
-      if (nextAppState === 'active') {
-        checkPermission();
-      }
+      if (nextAppState === 'active') checkPermission();
     });
-
     return () => subscription.remove();
   }, []);
 
-  // ─── Load saved alert settings on load ───────────────────────
+  // ── Load saved settings ───────────────────────────────────────
   useEffect(() => {
     const loadSettings = async () => {
       const saved = await loadAlertSettings();
@@ -106,13 +89,12 @@ export default function SMNotificationAnalysisScreen() {
     loadSettings();
   }, []);
 
-  // ─── Handlers ─────────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────
   const handleToggleAccess = async () => {
     await openNotificationAccessSettings();
   };
 
-  // When user picks Low / Medium / High → auto set count + time
-  const handleSensitivityChange = async (level) => {
+  const handleSensitivityChange = async level => {
     const preset = SENSITIVITY_PRESETS[level];
     setSensitivity(level);
     setNegativeCount(preset.negativeCount);
@@ -124,8 +106,7 @@ export default function SMNotificationAnalysisScreen() {
     });
   };
 
-  // When user picks custom message count
-  const handleCountChange = async (count) => {
+  const handleCountChange = async count => {
     setNegativeCount(count);
     setSensitivity('Custom');
     await saveAlertSettings({
@@ -135,8 +116,7 @@ export default function SMNotificationAnalysisScreen() {
     });
   };
 
-  // When user picks custom time window
-  const handleTimeChange = async (mins) => {
+  const handleTimeChange = async mins => {
     setTimeWindowMins(mins);
     setSensitivity('Custom');
     await saveAlertSettings({
@@ -146,7 +126,7 @@ export default function SMNotificationAnalysisScreen() {
     });
   };
 
-  // ─── Reusable Setting Row ─────────────────────────────────────
+  // ── Components ────────────────────────────────────────────────
   const SettingRow = ({ title, subtitle, value, onChange }) => (
     <View style={styles.settingRow}>
       <View style={{ flex: 1 }}>
@@ -165,7 +145,6 @@ export default function SMNotificationAnalysisScreen() {
     </View>
   );
 
-  // ─── Reusable Pill Button ─────────────────────────────────────
   const PillButton = ({ label, active, onPress }) => (
     <TouchableOpacity
       style={[styles.pillBtn, active && styles.pillBtnActive]}
@@ -177,14 +156,13 @@ export default function SMNotificationAnalysisScreen() {
     </TouchableOpacity>
   );
 
-  // ─── RENDER ───────────────────────────────────────────────────
+  // ── RENDER ────────────────────────────────────────────────────
   return (
     <DashboardBackground>
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
         <Text style={styles.brand}>EMOTIONAL FILTER</Text>
         <Text style={styles.title}>Notification Analysis</Text>
         <Text style={styles.sub}>
@@ -192,7 +170,6 @@ export default function SMNotificationAnalysisScreen() {
           raw messages shown).
         </Text>
 
-        {/* ── Today Summary ── */}
         <SMSectionTitle title="Today Summary" subtitle="" />
         <View style={styles.summaryCard}>
           <View style={styles.summaryTop}>
@@ -244,16 +221,13 @@ export default function SMNotificationAnalysisScreen() {
           </View>
         </View>
 
-        {/* ── Privacy Card ── */}
         <SMPrivacyStatusCard />
 
-        {/* ── Settings Header ── */}
         <SMSectionTitle
           title="Settings"
           subtitle="Manage notification access and alerts."
         />
 
-        {/* ── Master Toggle ── */}
         <View style={styles.ethicsCard}>
           <View style={styles.masterRow}>
             <View style={{ flex: 1 }}>
@@ -264,7 +238,9 @@ export default function SMNotificationAnalysisScreen() {
                 Turn on to monitor selected apps and allow risk alerts.
               </Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: statusUI.bg }]}>
+            <View
+              style={[styles.statusBadge, { backgroundColor: statusUI.bg }]}
+            >
               <Text style={[styles.statusText, { color: statusUI.text }]}>
                 {statusUI.label}
               </Text>
@@ -281,13 +257,10 @@ export default function SMNotificationAnalysisScreen() {
           </View>
         </View>
 
-        {/* ── Settings (only when permission is ON) ── */}
         {notifAccessEnabled && (
           <>
             <View style={{ height: spacing.md }} />
             <View style={styles.settingsCard}>
-
-              {/* ── App Monitor Toggles ── */}
               <Text style={styles.groupTitle}>Control Access</Text>
               <Text style={styles.groupSub}>
                 Choose which apps to monitor for risk signals.
@@ -314,7 +287,6 @@ export default function SMNotificationAnalysisScreen() {
 
               <View style={styles.divider} />
 
-              {/* ── Push Notifications ── */}
               <Text style={styles.groupTitle}>Push Notifications</Text>
               <Text style={styles.groupSub}>
                 Personal reminders and safety alerts.
@@ -335,20 +307,22 @@ export default function SMNotificationAnalysisScreen() {
 
               <View style={styles.divider} />
 
-              {/* ── Alert Threshold Settings ── */}
               <Text style={styles.groupTitle}>Alert Threshold</Text>
               <Text style={styles.groupSub}>
                 Customize when to trigger a mental health alert.
               </Text>
               <View style={{ height: spacing.sm }} />
 
-              {/* Sensitivity Level */}
               <Text style={styles.settingTitle}>Sensitivity Level</Text>
               <Text style={styles.settingSub}>
-                {sensitivity === 'Low' && 'Triggers after 7 negative msgs in 15 mins'}
-                {sensitivity === 'Medium' && 'Triggers after 5 negative msgs in 5 mins'}
-                {sensitivity === 'High' && 'Triggers after 3 negative msgs in 3 mins'}
-                {sensitivity === 'Custom' && `Custom: ${negativeCount} msgs in ${timeWindowMins} mins`}
+                {sensitivity === 'Low' &&
+                  'Triggers after 7 negative msgs in 15 mins'}
+                {sensitivity === 'Medium' &&
+                  'Triggers after 5 negative msgs in 5 mins'}
+                {sensitivity === 'High' &&
+                  'Triggers after 3 negative msgs in 3 mins'}
+                {sensitivity === 'Custom' &&
+                  `Custom: ${negativeCount} msgs in ${timeWindowMins} mins`}
               </Text>
               <View style={styles.pillRow}>
                 {['Low', 'Medium', 'High'].map(level => (
@@ -362,8 +336,6 @@ export default function SMNotificationAnalysisScreen() {
               </View>
 
               <View style={{ height: spacing.md }} />
-
-              {/* Time Window */}
               <Text style={styles.settingTitle}>
                 Time Window:{' '}
                 <Text style={{ color: '#00E0FF' }}>{timeWindowMins} mins</Text>
@@ -383,8 +355,6 @@ export default function SMNotificationAnalysisScreen() {
               </View>
 
               <View style={{ height: spacing.md }} />
-
-              {/* Negative Message Count */}
               <Text style={styles.settingTitle}>
                 Negative Messages:{' '}
                 <Text style={{ color: '#00E0FF' }}>{negativeCount}</Text>
@@ -403,7 +373,6 @@ export default function SMNotificationAnalysisScreen() {
                 ))}
               </View>
 
-              {/* Current settings summary */}
               <View style={styles.summaryBadge}>
                 <Text style={styles.summaryBadgeText}>
                   🔔 Alert triggers after{' '}
@@ -416,7 +385,6 @@ export default function SMNotificationAnalysisScreen() {
                   </Text>
                 </Text>
               </View>
-
             </View>
           </>
         )}
@@ -442,8 +410,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     lineHeight: 18,
   },
-
-  // ── Summary Card ──
   summaryCard: {
     backgroundColor: colors.card,
     borderColor: colors.border,
@@ -486,14 +452,17 @@ const styles = StyleSheet.create({
   },
   pillText: { color: colors.text, fontWeight: '900', fontSize: 12 },
   row: { flexDirection: 'row', gap: spacing.md },
-
-  // ── Ethics / Master Toggle Card ──
   ethicsCard: {
     backgroundColor: colors.card,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 18,
     padding: spacing.md,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    marginVertical: spacing.md,
   },
   masterRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   masterTitle: { color: colors.text, fontWeight: '900', fontSize: 13 },
@@ -511,8 +480,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   statusText: { fontWeight: '900', fontSize: 11, letterSpacing: 0.5 },
-
-  // ── Settings Card ──
   settingsCard: {
     backgroundColor: colors.card,
     borderColor: colors.border,
@@ -522,11 +489,6 @@ const styles = StyleSheet.create({
   },
   groupTitle: { color: colors.text, fontWeight: '900', fontSize: 14 },
   groupSub: { color: colors.muted, marginTop: 6, fontSize: 12, lineHeight: 16 },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    marginVertical: spacing.md,
-  },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -539,14 +501,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-
-  // ── Pill Buttons (for threshold settings) ──
-  pillRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-    flexWrap: 'wrap',
-  },
+  pillRow: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
   pillBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -559,16 +514,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,224,255,0.15)',
     borderColor: '#00E0FF',
   },
-  pillBtnText: {
-    color: '#9CA3AF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  pillBtnTextActive: {
-    color: '#00E0FF',
-  },
-
-  // ── Summary Badge ──
+  pillBtnText: { color: '#9CA3AF', fontWeight: '700', fontSize: 13 },
+  pillBtnTextActive: { color: '#00E0FF' },
   summaryBadge: {
     marginTop: spacing.md,
     padding: spacing.sm,

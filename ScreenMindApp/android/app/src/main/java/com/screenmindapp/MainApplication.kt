@@ -15,6 +15,9 @@ import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
 import com.screenmindapp.sleep.SleepEventPackage
 
+// ✅ Social Media native modules
+import com.screenmindapp.socialmedia.DeviceControlPackage
+
 class MainApplication : Application(), ReactApplication {
 
   override val reactHost: ReactHost by lazy {
@@ -31,7 +34,9 @@ class MainApplication : Application(), ReactApplication {
           add(CommunicationStatsPackage())
           add(SleepEventPackage())
 
-          // Packages that cannot be autolinked yet can be added manually here
+          // ✅ Social Media native packages
+          add(DeviceControlPackage())
+
         },
     )
   }
