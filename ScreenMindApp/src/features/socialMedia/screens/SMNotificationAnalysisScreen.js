@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   AppState,
   TouchableOpacity,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import DashboardBackground from '../../../components/DashboardBackground';
 import { colors } from '../../../theme/colors';
 import { spacing } from '../../../theme/spacing';
@@ -26,6 +27,8 @@ import {
   MESSAGE_COUNT_OPTIONS,
 } from '../services/smSettings.service';
 
+const BUFFER_KEY = 'sm_message_buffer';
+
 export default function SMNotificationAnalysisScreen() {
   const [notifAccessEnabled, setNotifAccessEnabled] = useState(false);
   const [monitorWhatsApp, setMonitorWhatsApp] = useState(true);
@@ -36,6 +39,16 @@ export default function SMNotificationAnalysisScreen() {
   const [sensitivity, setSensitivity] = useState('Medium');
   const [negativeCount, setNegativeCount] = useState(5);
   const [timeWindowMins, setTimeWindowMins] = useState(5);
+
+  // ── Live Window State ──────────────────────────────────────────
+  const [activeCount, setActiveCount] = useState(0);
+  const [oldestMsgAge, setOldestMsgAge] = useState(null);
+  const [windowSecsLeft, setWindowSecsLeft] = useState(0);
+  const timerRef = useRef(null);
+
+  // ── Cooldown State ─────────────────────────────────────────────
+  const [cooldownSecsLeft, setCooldownSecsLeft] = useState(0); // seconds remaining
+  const [cooldownActive, setCooldownActive] = useState(false);
 
   const overallTone = 'Mixed';
   const tone = 'high';
@@ -65,7 +78,7 @@ export default function SMNotificationAnalysisScreen() {
     [notifAccessEnabled],
   );
 
-  // ── Check notification permission ────────────────────────────
+  // ── Check notification permission ──────────────────────────────
   useEffect(() => {
     const checkPermission = async () => {
       const isGranted = await isNotificationAccessEnabled();
@@ -78,7 +91,7 @@ export default function SMNotificationAnalysisScreen() {
     return () => subscription.remove();
   }, []);
 
-  // ── Load saved settings ───────────────────────────────────────
+  // ── Load saved settings ────────────────────────────────────────
   useEffect(() => {
     const loadSettings = async () => {
       const saved = await loadAlertSettings();
@@ -89,7 +102,76 @@ export default function SMNotificationAnalysisScreen() {
     loadSettings();
   }, []);
 
-  // ── Handlers ─────────────────────────────────────────────────
+  // ── Live Window + Cooldown Timer ───────────────────────────────
+  // Reads buffer + cooldown every second
+  useEffect(() => {
+    const tick = async () => {
+      try {
+        // ── Buffer / window logic ──
+        const raw = await AsyncStorage.getItem(BUFFER_KEY);
+        if (!raw) {
+          setActiveCount(0);
+          setOldestMsgAge(null);
+          setWindowSecsLeft(0);
+        } else {
+          const buffer = JSON.parse(raw);
+          const windowMs = timeWindowMins * 60 * 1000;
+          const cutoffTime = Date.now() - windowMs;
+          const active = buffer.filter(item => {
+            const msgTime = new Date(item.time).getTime();
+            return msgTime >= cutoffTime;
+          });
+          setActiveCount(active.length);
+          if (active.length > 0) {
+            const oldestTime = Math.min(
+              ...active.map(item => new Date(item.time).getTime()),
+            );
+            const ageMs = Date.now() - oldestTime;
+            const secsLeft = Math.max(0, Math.round((windowMs - ageMs) / 1000));
+            setOldestMsgAge(ageMs);
+            setWindowSecsLeft(secsLeft);
+          } else {
+            setOldestMsgAge(null);
+            setWindowSecsLeft(0);
+          }
+        }
+
+        // ── Cooldown logic ──
+        const cooldownRaw = await AsyncStorage.getItem('sm_alert_cooldown');
+        if (cooldownRaw) {
+          const { until } = JSON.parse(cooldownRaw);
+          const secsLeft = Math.max(0, Math.round((until - Date.now()) / 1000));
+          if (secsLeft > 0) {
+            setCooldownActive(true);
+            setCooldownSecsLeft(secsLeft);
+          } else {
+            setCooldownActive(false);
+            setCooldownSecsLeft(0);
+          }
+        } else {
+          setCooldownActive(false);
+          setCooldownSecsLeft(0);
+        }
+      } catch (e) {}
+    };
+
+    tick(); // run immediately
+    timerRef.current = setInterval(tick, 1000); // update every second
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [timeWindowMins]); // re-run if timeWindowMins changes
+
+  // ── Format seconds as MM:SS ────────────────────────────────────
+  const formatTime = secs => {
+    const m = Math.floor(secs / 60)
+      .toString()
+      .padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  // ── Handlers ───────────────────────────────────────────────────
   const handleToggleAccess = async () => {
     await openNotificationAccessSettings();
   };
@@ -126,7 +208,19 @@ export default function SMNotificationAnalysisScreen() {
     });
   };
 
-  // ── Components ────────────────────────────────────────────────
+  // ── Reset Cooldown ─────────────────────────────────────────────
+  const handleResetCooldown = async () => {
+    try {
+      await AsyncStorage.removeItem('sm_alert_cooldown');
+      setCooldownActive(false);
+      setCooldownSecsLeft(0);
+      console.log('🔓 Cooldown reset manually');
+    } catch (e) {
+      console.log('❌ Reset error:', e);
+    }
+  };
+
+  // ── Sub-components ─────────────────────────────────────────────
   const SettingRow = ({ title, subtitle, value, onChange }) => (
     <View style={styles.settingRow}>
       <View style={{ flex: 1 }}>
@@ -156,7 +250,15 @@ export default function SMNotificationAnalysisScreen() {
     </TouchableOpacity>
   );
 
-  // ── RENDER ────────────────────────────────────────────────────
+  // ── Progress bar fill % ────────────────────────────────────────
+  const windowFillPct = Math.min(100, (activeCount / negativeCount) * 100);
+  const windowTimePct =
+    windowSecsLeft > 0
+      ? Math.min(100, (windowSecsLeft / (timeWindowMins * 60)) * 100)
+      : 0;
+  const isWindowCritical = activeCount >= negativeCount;
+
+  // ── RENDER ─────────────────────────────────────────────────────
   return (
     <DashboardBackground>
       <ScrollView
@@ -261,6 +363,7 @@ export default function SMNotificationAnalysisScreen() {
           <>
             <View style={{ height: spacing.md }} />
             <View style={styles.settingsCard}>
+              {/* ── App Monitor Toggles ── */}
               <Text style={styles.groupTitle}>Control Access</Text>
               <Text style={styles.groupSub}>
                 Choose which apps to monitor for risk signals.
@@ -287,6 +390,7 @@ export default function SMNotificationAnalysisScreen() {
 
               <View style={styles.divider} />
 
+              {/* ── Push Notifications ── */}
               <Text style={styles.groupTitle}>Push Notifications</Text>
               <Text style={styles.groupSub}>
                 Personal reminders and safety alerts.
@@ -307,6 +411,7 @@ export default function SMNotificationAnalysisScreen() {
 
               <View style={styles.divider} />
 
+              {/* ── Alert Threshold ── */}
               <Text style={styles.groupTitle}>Alert Threshold</Text>
               <Text style={styles.groupSub}>
                 Customize when to trigger a mental health alert.
@@ -385,6 +490,181 @@ export default function SMNotificationAnalysisScreen() {
                   </Text>
                 </Text>
               </View>
+
+              <View style={styles.divider} />
+
+              {/* ── ⏱️ LIVE WINDOW MONITOR ── */}
+              <Text style={styles.groupTitle}>⏱️ Live Window Monitor</Text>
+              <Text style={styles.groupSub}>
+                Real-time view of your active message window. Resets
+                automatically as messages expire.
+              </Text>
+              <View style={{ height: spacing.sm }} />
+
+              {/* Message count progress bar */}
+              <View style={styles.liveRow}>
+                <Text style={styles.liveLabel}>Messages in window</Text>
+                <Text
+                  style={[
+                    styles.liveValue,
+                    { color: isWindowCritical ? '#EF4444' : '#00E0FF' },
+                  ]}
+                >
+                  {activeCount} / {negativeCount}
+                </Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: `${windowFillPct}%`,
+                      backgroundColor: isWindowCritical ? '#EF4444' : '#00E0FF',
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressSub}>
+                {activeCount === 0
+                  ? '✅ Window is empty — no active messages'
+                  : isWindowCritical
+                  ? '🚨 Threshold reached — alert triggered!'
+                  : `📨 ${
+                      negativeCount - activeCount
+                    } more negative msg(s) needed to trigger`}
+              </Text>
+
+              <View style={{ height: spacing.md }} />
+
+              {/* Time countdown bar */}
+              <View style={styles.liveRow}>
+                <Text style={styles.liveLabel}>Window resets in</Text>
+                <Text style={[styles.liveValue, { color: '#FFB800' }]}>
+                  {activeCount > 0 ? formatTime(windowSecsLeft) : '--:--'}
+                </Text>
+              </View>
+              <View style={styles.progressBarBg}>
+                <View
+                  style={[
+                    styles.progressBarFill,
+                    {
+                      width: `${windowTimePct}%`,
+                      backgroundColor: '#FFB800',
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.progressSub}>
+                {activeCount > 0
+                  ? `🕒 Oldest message expires in ${formatTime(windowSecsLeft)}`
+                  : '✅ No messages — window is clear'}
+              </Text>
+            </View>
+
+            {/* ── ⏸️ COOLDOWN TIMER CARD ── */}
+            <View style={{ height: spacing.md }} />
+            <View
+              style={[
+                styles.settingsCard,
+                cooldownActive && styles.cooldownCardActive,
+              ]}
+            >
+              <View style={styles.cooldownHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.groupTitle}>⏸️ Alert Cooldown</Text>
+                  <Text style={styles.groupSub}>
+                    Active after tapping "I Manage It" on the alert overlay. No
+                    new alerts will fire during this period.
+                  </Text>
+                </View>
+                {/* Status badge */}
+                <View
+                  style={[
+                    styles.cooldownBadge,
+                    {
+                      backgroundColor: cooldownActive
+                        ? 'rgba(255,184,0,0.15)'
+                        : 'rgba(34,197,94,0.15)',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.cooldownBadgeText,
+                      { color: cooldownActive ? '#FFB800' : '#22C55E' },
+                    ]}
+                  >
+                    {cooldownActive ? '⏸ PAUSED' : '▶ ACTIVE'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ height: spacing.md }} />
+
+              {cooldownActive ? (
+                <>
+                  {/* Countdown display */}
+                  <View style={styles.countdownBox}>
+                    <Text style={styles.countdownLabel}>Alerts resume in</Text>
+                    <Text style={styles.countdownValue}>
+                      {formatTime(cooldownSecsLeft)}
+                    </Text>
+                    <Text style={styles.countdownSub}>mm : ss</Text>
+                  </View>
+
+                  <View style={{ height: spacing.md }} />
+
+                  {/* Cooldown progress bar */}
+                  <View style={styles.liveRow}>
+                    <Text style={styles.liveLabel}>Time remaining</Text>
+                    <Text
+                      style={[
+                        styles.liveValue,
+                        { color: '#FFB800', fontSize: 16 },
+                      ]}
+                    >
+                      {Math.ceil(cooldownSecsLeft / 60)} min left
+                    </Text>
+                  </View>
+                  <View style={styles.progressBarBg}>
+                    <View
+                      style={[
+                        styles.progressBarFill,
+                        {
+                          width: `${(cooldownSecsLeft / (30 * 60)) * 100}%`,
+                          backgroundColor: '#FFB800',
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.progressSub}>
+                    ⏸ Overlay alerts are paused — you said you'll manage it 💪
+                  </Text>
+
+                  <View style={{ height: spacing.md }} />
+
+                  {/* Reset button */}
+                  <TouchableOpacity
+                    style={styles.resetBtn}
+                    onPress={handleResetCooldown}
+                  >
+                    <Text style={styles.resetBtnText}>
+                      🔓 Reset Cooldown — Re-enable Alerts Now
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <View style={styles.cooldownClearBox}>
+                  <Text style={styles.cooldownClearIcon}>✅</Text>
+                  <Text style={styles.cooldownClearTitle}>
+                    Alerts are active
+                  </Text>
+                  <Text style={styles.cooldownClearSub}>
+                    No cooldown running. You will receive overlay alerts when
+                    high risk is detected.
+                  </Text>
+                </View>
+              )}
             </View>
           </>
         )}
@@ -529,5 +809,93 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     textAlign: 'center',
+  },
+
+  // ── Live Window Monitor styles ──
+  liveRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  liveLabel: { color: colors.muted, fontSize: 13, fontWeight: '700' },
+  liveValue: { fontSize: 20, fontWeight: '900', fontVariant: ['tabular-nums'] },
+  progressBarBg: {
+    width: '100%',
+    height: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressBarFill: { height: '100%', borderRadius: 999 },
+  progressSub: {
+    color: colors.faint,
+    fontSize: 11,
+    marginTop: 6,
+    lineHeight: 16,
+  },
+
+  // ── Cooldown Timer styles ──
+  cooldownCardActive: {
+    borderColor: 'rgba(255,184,0,0.35)',
+    backgroundColor: 'rgba(255,184,0,0.04)',
+  },
+  cooldownHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  cooldownBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginTop: 2,
+  },
+  cooldownBadgeText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+  countdownBox: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    backgroundColor: 'rgba(255,184,0,0.08)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,184,0,0.25)',
+  },
+  countdownLabel: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  countdownValue: {
+    color: '#FFB800',
+    fontSize: 52,
+    fontWeight: '900',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 2,
+  },
+  countdownSub: {
+    color: colors.faint,
+    fontSize: 11,
+    marginTop: 4,
+    letterSpacing: 4,
+  },
+  resetBtn: {
+    backgroundColor: 'rgba(34,197,94,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.35)',
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+  },
+  resetBtnText: { color: '#22C55E', fontWeight: '900', fontSize: 13 },
+  cooldownClearBox: { alignItems: 'center', paddingVertical: 20 },
+  cooldownClearIcon: { fontSize: 32, marginBottom: 8 },
+  cooldownClearTitle: {
+    color: colors.text,
+    fontWeight: '900',
+    fontSize: 15,
+    marginBottom: 6,
+  },
+  cooldownClearSub: {
+    color: colors.faint,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

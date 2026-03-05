@@ -22,12 +22,42 @@ const APP_NAMES = {
 // ─────────────────────────────────────────────
 // ✅ CONSTANTS
 // ─────────────────────────────────────────────
-const BUFFER_SIZE = 5;
 const BUFFER_KEY = 'sm_message_buffer';
 const COOLDOWN_KEY = 'sm_alert_cooldown';
 const OVERLAY_KEY = 'sm_overlay_trigger';
+const SETTINGS_KEY = 'sm_alert_settings';
+const MAX_BUFFER_SIZE = 20; // store up to 20 messages, filter by time
 const HIGH_THRESHOLD = 0.7;
 const MED_THRESHOLD = 0.4;
+
+// Default settings (used if user hasn't customized)
+const DEFAULT_TIME_WINDOW_MINS = 10; // messages older than this are expired
+const DEFAULT_MIN_MESSAGES = 3; // minimum messages needed to trigger alert
+
+// ─────────────────────────────────────────────
+// ✅ LOAD USER SETTINGS
+// Reads timeWindowMins and negativeCount from UI settings
+// ─────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+    if (!raw)
+      return {
+        timeWindowMins: DEFAULT_TIME_WINDOW_MINS,
+        minMessages: DEFAULT_MIN_MESSAGES,
+      };
+    const saved = JSON.parse(raw);
+    return {
+      timeWindowMins: saved.timeWindowMins || DEFAULT_TIME_WINDOW_MINS,
+      minMessages: saved.negativeCount || DEFAULT_MIN_MESSAGES,
+    };
+  } catch (e) {
+    return {
+      timeWindowMins: DEFAULT_TIME_WINDOW_MINS,
+      minMessages: DEFAULT_MIN_MESSAGES,
+    };
+  }
+}
 
 // ─────────────────────────────────────────────
 // ✅ PRIVACY FILTER
@@ -73,18 +103,28 @@ function sentimentEmoji(label) {
 // ─────────────────────────────────────────────
 // ✅ PRINT QUEUE
 // ─────────────────────────────────────────────
-function printQueue(buffer, avgScore, riskLevel) {
+function printQueue(
+  activeBuffer,
+  allBuffer,
+  avgScore,
+  riskLevel,
+  timeWindowMins,
+  minMessages,
+) {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`📬 MESSAGE QUEUE  [${buffer.length}/${BUFFER_SIZE} filled]`);
+  console.log(
+    `📬 ACTIVE WINDOW  [${activeBuffer.length} msgs in last ${timeWindowMins} mins | min needed: ${minMessages}]`,
+  );
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  buffer.forEach((item, index) => {
+  activeBuffer.forEach((item, index) => {
     const appName = APP_NAMES[item.app] || item.app;
     const emoji = sentimentEmoji(item.label);
     const score =
       typeof item.score === 'number' ? item.score.toFixed(2) : '0.00';
+    const age = Math.round((Date.now() - new Date(item.time).getTime()) / 1000);
     console.log(
       `  [${index + 1}] ${appName.padEnd(10)} → "${item.text}"`.padEnd(55) +
-        `${emoji} ${item.label} (${score})`,
+        `${emoji} ${item.label} (${score}) ${age}s ago`,
     );
   });
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -115,7 +155,6 @@ async function isCooldownActive() {
 
 // ─────────────────────────────────────────────
 // ✅ TRIGGER OVERLAY
-// Saves to AsyncStorage → screen reads and shows overlay
 // ─────────────────────────────────────────────
 async function triggerOverlay(avgScore, riskLevel) {
   try {
@@ -143,7 +182,7 @@ export default async function headlessTask({ notification }) {
   if (!notification) return;
 
   try {
-    // 1️⃣ Parse
+    // 1️⃣ Parse notification
     const parsed =
       typeof notification === 'string'
         ? JSON.parse(notification)
@@ -162,7 +201,7 @@ export default async function headlessTask({ notification }) {
     const cleanedText = sanitizeText(text);
     if (!cleanedText) return;
 
-    // 4️⃣ Filter summaries
+    // 4️⃣ Filter summaries ("5 new messages" etc.)
     if (/^\d+\s+new\s+messages?$/i.test(cleanedText)) {
       console.log(`🚫 Filtered summary: "${cleanedText}"`);
       return;
@@ -180,14 +219,16 @@ export default async function headlessTask({ notification }) {
     const score = parseFloat(result.sentiment?.negative) / 100 || 0.0;
     console.log(`🔍 label=${label}, score=${score.toFixed(2)}`);
 
-    // 7️⃣ Load & clean buffer
+    // 7️⃣ Load settings from UI (timeWindowMins + minMessages)
+    const { timeWindowMins, minMessages } = await loadSettings();
+    const windowMs = timeWindowMins * 60 * 1000; // convert to milliseconds
+    const cutoffTime = Date.now() - windowMs;
+
+    // 8️⃣ Load full buffer from storage
     const raw = await AsyncStorage.getItem(BUFFER_KEY);
     let buffer = raw ? JSON.parse(raw) : [];
-    buffer = buffer.filter(
-      item => item.score !== undefined && item.score !== null,
-    );
 
-    // 8️⃣ Sliding window
+    // 9️⃣ Add new message to buffer
     buffer.push({
       app: pkg,
       text: cleanedText,
@@ -195,35 +236,56 @@ export default async function headlessTask({ notification }) {
       score,
       time: new Date().toISOString(),
     });
-    if (buffer.length > BUFFER_SIZE) buffer = buffer.slice(-BUFFER_SIZE);
 
-    // 9️⃣ Save buffer
+    // 🔟 Trim buffer to MAX_BUFFER_SIZE (keep latest 20)
+    if (buffer.length > MAX_BUFFER_SIZE) {
+      buffer = buffer.slice(-MAX_BUFFER_SIZE);
+    }
+
+    // 1️⃣1️⃣ Save full buffer back to storage
     await AsyncStorage.setItem(BUFFER_KEY, JSON.stringify(buffer));
 
-    // Wait for full buffer
-    if (buffer.length < BUFFER_SIZE) {
-      console.log(`📥 Buffer filling: [${buffer.length}/${BUFFER_SIZE}]`);
+    // 1️⃣2️⃣ Filter: only messages within the time window
+    const activeBuffer = buffer.filter(item => {
+      const msgTime = new Date(item.time).getTime();
+      return msgTime >= cutoffTime && typeof item.score === 'number';
+    });
+
+    console.log(
+      `🕒 Time window: ${timeWindowMins} mins | Active: ${activeBuffer.length} msgs | Min needed: ${minMessages}`,
+    );
+
+    // 1️⃣3️⃣ Not enough messages in window → skip
+    if (activeBuffer.length < minMessages) {
+      console.log(
+        `📥 Not enough recent messages [${activeBuffer.length}/${minMessages}] — waiting...`,
+      );
       return;
     }
 
-    // 🔟 Average score
-    const validScores = buffer.map(item =>
-      typeof item.score === 'number' ? item.score : 0,
-    );
-    const avgScore = validScores.reduce((sum, s) => sum + s, 0) / BUFFER_SIZE;
+    // 1️⃣4️⃣ Calculate average score from active window only
+    const scores = activeBuffer.map(item => item.score);
+    const avgScore = scores.reduce((sum, s) => sum + s, 0) / scores.length;
     console.log(
-      `🔢 Scores: [${validScores.map(s => s.toFixed(2)).join(', ')}]`,
+      `🔢 Scores (active): [${scores.map(s => s.toFixed(2)).join(', ')}]`,
     );
 
-    // 1️⃣1️⃣ Risk level
+    // 1️⃣5️⃣ Determine risk level
     let riskLevel = 'LOW';
     if (avgScore >= HIGH_THRESHOLD) riskLevel = 'HIGH';
     else if (avgScore >= MED_THRESHOLD) riskLevel = 'MODERATE';
 
-    // 1️⃣2️⃣ Print queue
-    printQueue(buffer, avgScore, riskLevel);
+    // 1️⃣6️⃣ Print queue
+    printQueue(
+      activeBuffer,
+      buffer,
+      avgScore,
+      riskLevel,
+      timeWindowMins,
+      minMessages,
+    );
 
-    // 1️⃣3️⃣ Trigger overlay only for HIGH + no cooldown
+    // 1️⃣7️⃣ Trigger overlay only for HIGH + no cooldown
     if (riskLevel === 'HIGH') {
       const onCooldown = await isCooldownActive();
       if (!onCooldown) {
@@ -231,11 +293,11 @@ export default async function headlessTask({ notification }) {
       }
     }
 
-    // 1️⃣4️⃣ Save analysis
+    // 1️⃣8️⃣ Save latest analysis result
     await AsyncStorage.setItem(
       'latest_sm_analysis',
       JSON.stringify({
-        buffer,
+        activeBuffer,
         avg_score: avgScore,
         risk_level: riskLevel,
         timestamp: new Date().toISOString(),
