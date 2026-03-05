@@ -148,7 +148,7 @@ async function ensureTables(db) {
       overall_intensity TEXT DEFAULT 'Mild',
       FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
     );
-  `);   
+  `);
 }
 
 export async function getDB() {

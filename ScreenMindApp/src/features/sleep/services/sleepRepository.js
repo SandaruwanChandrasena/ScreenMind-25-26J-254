@@ -130,7 +130,7 @@ export async function logNotificationEvent({
       ts, is_night, is_social_media)
      VALUES (?, ?, ?, ?, ?, ?, ?);`,
     [userId, sessionId, packageName, title,
-     ts, isNight, isSocialMedia]
+      ts, isNight, isSocialMedia]
   );
 
   return true;
@@ -196,7 +196,7 @@ export async function getSessionSensorSamples(sessionId) {
      ORDER BY ts ASC;`,
     [sessionId]
   );
-  
+
   const samples = [];
   for (let i = 0; i < rs.rows.length; i++) {
     samples.push(rs.rows.item(i));
@@ -296,8 +296,8 @@ export async function getSessionSummary(sessionId) {
   const db = await getDB();
 
   const srs = await exec(
-    db, 
-    `SELECT * FROM sleep_sessions WHERE id = ? LIMIT 1;`, 
+    db,
+    `SELECT * FROM sleep_sessions WHERE id = ? LIMIT 1;`,
     [sessionId]
   );
   if (srs.rows.length === 0) return null;
@@ -305,7 +305,15 @@ export async function getSessionSummary(sessionId) {
   const session = srs.rows.item(0);
   const start = session.start_time;
   const end = session.end_time ?? Date.now();
-  const durationMs = Math.max(0, end - start);
+  let durationMs = Math.max(0, end - start);
+
+  // Sanity check: cap duration at 24 hours (86400000 ms)
+  // If duration exceeds this, likely an unclosed session
+  const MAX_SLEEP_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+  if (durationMs > MAX_SLEEP_DURATION_MS) {
+    console.warn(`⚠️ Session ${sessionId} has abnormal duration: ${Math.floor(durationMs / (1000 * 60 * 60))}h. Capping at 24h.`);
+    durationMs = MAX_SLEEP_DURATION_MS;
+  }
 
   // Count unlocks (night only)
   const unlockRS = await exec(db,
@@ -378,7 +386,7 @@ export async function getSessionSummary(sessionId) {
      WHERE session_id = ? ORDER BY ts DESC LIMIT 1;`,
     [sessionId]
   );
-  const checkIn = checkRS.rows.length 
+  const checkIn = checkRS.rows.length
     ? checkRS.rows.item(0) : null;
 
   // Calculate totals
@@ -396,7 +404,7 @@ export async function getSessionSummary(sessionId) {
     notifCount: notifRS.rows.item(0).c,
     nightNotifCount: nightNotifRS.rows.item(0).c,
     socialNotifCount: socialNotifRS.rows.item(0).c,
-    chargingStartTime: chargingRS.rows.length 
+    chargingStartTime: chargingRS.rows.length
       ? chargingRS.rows.item(0).ts : null,
     sensorSamples,
     snoringEvents,
@@ -425,8 +433,8 @@ export async function saveSnoringEpisode({
      (user_id, session_id, start_ts, end_ts, 
       duration_seconds, intensity)
      VALUES (?, ?, ?, ?, ?, ?);`,
-    [userId, sessionId, startTs, endTs, 
-     durationSeconds, intensity]
+    [userId, sessionId, startTs, endTs,
+      durationSeconds, intensity]
   );
 
   return true;
@@ -477,7 +485,7 @@ export async function getSnoringReport(sessionId) {
   // Calculate intensity
   let intensity = "None";
   if (totalMinutes > 0 && totalMinutes < 15) intensity = "Mild";
-  else if (totalMinutes >= 15 && totalMinutes < 45) 
+  else if (totalMinutes >= 15 && totalMinutes < 45)
     intensity = "Moderate";
   else if (totalMinutes >= 45) intensity = "Severe";
 
@@ -499,8 +507,8 @@ export async function getSnoringReport(sessionId) {
 export async function debugDumpSnoringTable() {
   const db = await getDB();
   const rs = await exec(
-    db, 
-    `SELECT * FROM snoring_events ORDER BY id DESC LIMIT 20;`, 
+    db,
+    `SELECT * FROM snoring_events ORDER BY id DESC LIMIT 20;`,
     []
   );
 
@@ -562,5 +570,48 @@ export async function getLatestCompletedSession(userId = null) {
   );
 
   return rs.rows.length ? rs.rows.item(0) : null;
+}
+
+/**
+ * Clean up stale sessions that are still open after 24 hours
+ * Call this on app startup to fix any unclosed sessions
+ */
+export async function cleanupStaleSessions() {
+  const db = await getDB();
+  const MAX_SESSION_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const cutoffTime = Date.now() - MAX_SESSION_AGE_MS;
+
+  // Find all sessions that are still open and started more than 24 hours ago
+  const rs = await exec(
+    db,
+    `SELECT * FROM sleep_sessions
+     WHERE end_time IS NULL AND start_time < ?;`,
+    [cutoffTime]
+  );
+
+  if (rs.rows.length === 0) {
+    console.log('No stale sessions found');
+    return 0;
+  }
+
+  // Close each stale session with a reasonable end time (start + 8 hours)
+  let closedCount = 0;
+  for (let i = 0; i < rs.rows.length; i++) {
+    const session = rs.rows.item(i);
+    const reasonableEndTime = session.start_time + (8 * 60 * 60 * 1000); // 8 hours after start
+
+    await exec(
+      db,
+      `UPDATE sleep_sessions 
+       SET end_time = ?
+       WHERE id = ?;`,
+      [reasonableEndTime, session.id]
+    );
+
+    closedCount++;
+    console.log(`Closed stale session ${session.id} (started ${new Date(session.start_time).toLocaleString()})`);
+  }
+
+  return closedCount;
 }
 

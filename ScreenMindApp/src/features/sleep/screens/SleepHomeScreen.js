@@ -19,14 +19,14 @@ import { spacing } from "../../../theme/spacing";
 import { settingsAccess } from "../services/settingsAccess";
 
 ///
-import { 
-  startSensorTracking, 
-  stopSensorTracking 
+import {
+  startSensorTracking,
+  stopSensorTracking
 } from "../services/sensorService";
 
-import { 
-  startSleepEventTracking, 
-  stopSleepEventTracking 
+import {
+  startSleepEventTracking,
+  stopSleepEventTracking
 } from "../services/sleepEventService";
 ///
 import {
@@ -37,11 +37,12 @@ import {
   logScreenEvent,
   logNotificationEvent,
   debugDumpSleepTables, // optional
+  cleanupStaleSessions,
 } from "../services/sleepRepository";
 
 
-import { 
-  computeRiskScore, 
+import {
+  computeRiskScore,
   predictSleepRiskML,
   buildFeaturesFromSessions
 } from "../services/sleepApiService";
@@ -74,8 +75,8 @@ function RiskBadge({ risk }) {
     risk === "High"
       ? "rgba(239,68,68,0.18)"
       : risk === "Medium"
-      ? "rgba(245,158,11,0.16)"
-      : "rgba(34,197,94,0.14)";
+        ? "rgba(245,158,11,0.16)"
+        : "rgba(34,197,94,0.14)";
 
   return (
     <View style={[styles.riskBadge, { backgroundColor: bg }]}>
@@ -174,16 +175,16 @@ export default function SleepHomeScreen({ navigation }) {
 
       // Try ML risk prediction first
       let riskResult = null;
-      
+
       const last7 = await getLast7Sessions(userId);
-      
+
       if (last7 && last7.length === 7) {
         // Build features for ML model
         const features = buildFeaturesFromSessions(last7);
-        
+
         // Call ML API
         const mlResult = await predictSleepRiskML(features);
-        
+
         if (mlResult) {
           riskResult = {
             score: mlResult.risk_score,
@@ -199,7 +200,7 @@ export default function SleepHomeScreen({ navigation }) {
         const apiResult = await computeRiskScore({
           screen_time_after_10pm: summary.screenOnCount * 8,
           social_media_mins_night: summary.socialNotifCount * 5,
-          last_screen_off_hour: 
+          last_screen_off_hour:
             new Date(summary.end || Date.now()).getHours(),
           unlock_count_night: summary.unlockCount,
           notification_count_night: summary.nightNotifCount,
@@ -233,6 +234,13 @@ export default function SleepHomeScreen({ navigation }) {
   }, [userId]);
 
   useEffect(() => {
+    // Clean up stale sessions on mount
+    cleanupStaleSessions().then(count => {
+      if (count > 0) {
+        console.log(`✅ Cleaned up ${count} stale session(s)`);
+      }
+    });
+
     loadDashboard();
   }, [loadDashboard]);
 
@@ -258,7 +266,7 @@ export default function SleepHomeScreen({ navigation }) {
   //   const sub = emitter.addListener("SCREENMIND_NOTIFICATION", async (event) => {
   //     try {
   //       console.log("📱 Received notification event:", event);
-        
+
   //       // event expected: { packageName, title, ts }
   //       const packageName = event?.packageName ?? null;
   //       const title = event?.title ?? null;
@@ -338,7 +346,7 @@ export default function SleepHomeScreen({ navigation }) {
   const onStartSession = async () => {
     try {
       if (runningSessionId) {
-        Alert.alert("Already running", 
+        Alert.alert("Already running",
           "Sleep session is already active.");
         return;
       }
@@ -351,7 +359,7 @@ export default function SleepHomeScreen({ navigation }) {
       startSensorTracking(sessionId, userId);
 
       setRunningSessionId(sessionId);
-      Alert.alert("Started ✅", 
+      Alert.alert("Started ✅",
         "Sleep session started. Tracking unlocks, " +
         "notifications and sensors now.");
     } catch (e) {
@@ -364,7 +372,7 @@ export default function SleepHomeScreen({ navigation }) {
     try {
       const sessionId = runningSessionId;
       if (!sessionId) {
-        Alert.alert("No active session", 
+        Alert.alert("No active session",
           "Start a sleep session first.");
         return;
       }
@@ -376,7 +384,7 @@ export default function SleepHomeScreen({ navigation }) {
       await stopSleepSession({ sessionId });
       setRunningSessionId(null);
       await loadDashboard();
-      Alert.alert("Stopped ✅", 
+      Alert.alert("Stopped ✅",
         "Sleep session ended. Dashboard updated.");
     } catch (e) {
       console.log("Stop error:", e);

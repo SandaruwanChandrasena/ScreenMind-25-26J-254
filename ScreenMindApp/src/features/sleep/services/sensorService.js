@@ -42,6 +42,56 @@ export function stopSensorTracking() {
   console.log("🛑 Sensor tracking stopped");
 }
 
+// function startAccelerometerTracking() {
+//   const { SleepSensorModule } = NativeModules;
+
+//   if (!SleepSensorModule) {
+//     console.log("⚠️ SleepSensorModule not available");
+//     return;
+//   }
+
+//   accelInterval = setInterval(async () => {
+//     try {
+//       // Only track during night hours (9PM - 9AM)
+//       const hour = new Date().getHours();
+//       const isNight = hour >= 21 || hour < 9;
+//       if (!isNight) return;
+
+//       // Get accelerometer reading from native module
+//       const reading = await SleepSensorModule.getAccelerometerReading();
+      
+//       const { x, y, z } = reading;
+      
+//       // Calculate movement magnitude (remove gravity ~9.8)
+//       const magnitude = Math.sqrt(x * x + y * y + z * z);
+//       const movement = Math.abs(magnitude - 9.8);
+
+//       // Classify movement
+//       let classification = "ACTIVE";
+//       if (movement < MOVEMENT.STILL) classification = "STILL";
+//       else if (movement < MOVEMENT.LIGHT) classification = "LIGHT";
+//       else if (movement < MOVEMENT.RESTLESS) classification = "RESTLESS";
+
+//       await logSensorSample({
+//         userId,
+//         sessionId: currentSessionId,
+//         sensorType: "ACCELEROMETER",
+//         x,
+//         y,
+//         z,
+//         value: movement,
+//         ts: Date.now(),
+//         meta: JSON.stringify({ classification }),
+//       });
+
+//       console.log(`📳 Accel: ${classification} (${movement.toFixed(3)})`);
+
+//     } catch (e) {
+//       console.log("Accelerometer sample error:", e);
+//     }
+//   }, ACCEL_INTERVAL_MS);
+// }
+
 function startAccelerometerTracking() {
   const { SleepSensorModule } = NativeModules;
 
@@ -52,10 +102,8 @@ function startAccelerometerTracking() {
 
   accelInterval = setInterval(async () => {
     try {
-      // Only track during night hours (9PM - 9AM)
-      const hour = new Date().getHours();
-      const isNight = hour >= 21 || hour < 9;
-      if (!isNight) return;
+      // 🚨 REMOVED THE DAY/NIGHT CHECK HERE 🚨
+      // Now it will track anytime the session is active!
 
       // Get accelerometer reading from native module
       const reading = await SleepSensorModule.getAccelerometerReading();
