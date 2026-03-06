@@ -1,7 +1,20 @@
-// src/features/isolation/screens/IsolationOverviewScreen.js
+/**
+ * IsolationOverviewScreen.js
+ *
+ * Main dashboard for the Social Isolation component.
+ *
+ * What changed from the original:
+ *  • Uses the fixed isolationCollector (collectRealFeatures) which now properly
+ *    reads GPS, unlock, behaviour, communication, bluetooth.
+ *  • Passes the full scoring result (including reasons, suggestions,
+ *    socialItems, withdrawItems) into the saved daily record.
+ *  • The saved record is what IsolationWhyScreen and IsolationSuggestionsScreen read.
+ */
 
 import React, { useEffect, useMemo, useState, useCallback } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import {
+  View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
+} from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { RESULTS } from "../services/permissionHelper";
 
@@ -12,13 +25,19 @@ import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
 import GaugeRing from "../components/GaugeRing";
 
-// ✅ Storage + scoring + collector
 import { getIsolationPrefs, upsertDailyIsolationRecord } from "../services/isolationStorage";
 import { computeIsolationRisk } from "../services/isolationScoring";
 import { collectRealFeatures } from "../services/isolationCollector";
 import { checkAllPermissions } from "../services/permissionHelper";
 
-// ---------- Helpers ----------
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatMeters(m) {
+  const meters = Math.max(0, Math.round(m || 0));
+  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
+  return `${meters} m`;
+}
+
 function formatMinutes(min) {
   const m = Math.max(0, Math.round(min || 0));
   const h = Math.floor(m / 60);
@@ -27,100 +46,77 @@ function formatMinutes(min) {
   return `${h}h ${r}m`;
 }
 
-function formatMeters(m) {
-  const meters = Math.max(0, Math.round(m || 0));
-  if (meters >= 1000) return `${(meters / 1000).toFixed(1)} km`;
-  return `${meters} m`;
-}
-
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function buildSummary(features) {
-  const reasons = [];
-  if ((features.dailyDistanceMeters ?? 0) < 800) reasons.push("low movement");
-  if ((features.timeAtHomePct ?? 0) > 75) reasons.push("high time at home");
-  if ((features.uniqueContacts ?? 999) <= 2) reasons.push("fewer unique contacts");
-  if ((features.nightUsageMinutes ?? 0) > 90) reasons.push("high night usage");
-  if ((features.bluetoothAvgDevices ?? 999) <= 2) reasons.push("low nearby-device exposure");
-
-  if (!reasons.length) return "Your recent patterns look balanced. Keep maintaining healthy social exposure.";
-  return `${reasons.slice(0, 2).join(" + ")} detected over the last 7 days.`;
-}
-
 function safePrefs(p) {
-  // If storage returns null/undefined, default all to false (privacy-safe)
   return {
-    gps: !!p?.gps,
-    calls: !!p?.calls,
-    sms: !!p?.sms,
-    usage: !!p?.usage,
+    gps:       !!p?.gps,
+    calls:     !!p?.calls,
+    sms:       !!p?.sms,
+    usage:     !!p?.usage,
     bluetooth: !!p?.bluetooth,
-    wifi: !!p?.wifi,
+    wifi:      !!p?.wifi,
   };
 }
 
 function computeHasRequiredPermissions(perms, p) {
-  // Only require what user enabled in Privacy toggles
   const needsGps = p.gps;
   const gpsOk =
     !needsGps ||
     (perms.location === RESULTS.GRANTED && perms.backgroundLocation === RESULTS.GRANTED);
-
-  // (You can extend this later for calls/sms/bluetooth if your permissionHelper supports them)
   return gpsOk;
 }
 
-// ---------------------------------------------------------
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function IsolationOverviewScreen({ navigation }) {
-  const [loading, setLoading] = useState(true);
-  const [prefs, setPrefs] = useState(null);
-  const [features, setFeatures] = useState(null);
-  const [risk, setRisk] = useState({ score: 0, label: "Low", breakdown: {} });
+  const [loading,        setLoading]        = useState(true);
+  const [prefs,          setPrefs]          = useState(null);
+  const [features,       setFeatures]       = useState(null);
+  const [risk,           setRisk]           = useState({ score: 0, label: "Low", breakdown: {} });
   const [hasPermissions, setHasPermissions] = useState(true);
-  const [errorMsg, setErrorMsg] = useState("");
+  const [errorMsg,       setErrorMsg]       = useState("");
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setErrorMsg("");
 
     try {
-      // 1) Load consent toggles first (so we know what permissions to require)
+      // 1) Load prefs
       const storedPrefs = safePrefs(await getIsolationPrefs());
       setPrefs(storedPrefs);
 
       // 2) Check permissions
       const perms = await checkAllPermissions();
-      const ok = computeHasRequiredPermissions(perms, storedPrefs);
-      setHasPermissions(ok);
+      setHasPermissions(computeHasRequiredPermissions(perms, storedPrefs));
 
-      // 3) Collect features (real phone data)
-      // If permissions are not enough, collector may fail -> catch below and show warning card
+      // 3) Collect real features (this now reads GPS, unlock, behaviour, communication, BT)
       const f = await collectRealFeatures();
       setFeatures(f);
 
-      // 4) Compute risk
+      // 4) Score
       const r = computeIsolationRisk(f, storedPrefs);
       setRisk(r);
 
-      // 5) Save today record (for Stats/Trends)
-      const record = {
-        date: todayISO(),
-        features: f,
-        riskScore: r.score,
-        riskLabel: r.label,
-        breakdown: r.breakdown,
-      };
-      await upsertDailyIsolationRecord(record);
-    } catch (e) {
-      console.log("IsolationOverview init error:", e);
-      setErrorMsg(
-        "Couldn’t load some metrics. Please enable Privacy permissions and try again."
-      );
+      // 5) Save today's record — now includes reasons, suggestions, socialItems, withdrawItems
+      await upsertDailyIsolationRecord({
+        date:          todayISO(),
+        riskScore:     r.score,
+        riskLabel:     r.label,
+        breakdown:     r.breakdown,
+        used:          r.used,
+        reasons:       r.reasons,        // ← IsolationWhyScreen reads this
+        suggestions:   r.suggestions,    // ← IsolationSuggestionsScreen reads this
+        socialItems:   r.socialItems,    // ← IsolationStatsScreen reads this
+        withdrawItems: r.withdrawItems,  // ← IsolationStatsScreen reads this
+        features:      f,
+      });
 
-      // Keep UI stable even if collection fails
+    } catch (e) {
+      console.warn("IsolationOverview error:", e);
+      setErrorMsg("Couldn't load some metrics. Enable permissions and try again.");
       setFeatures((prev) => prev ?? {});
       setRisk((prev) => prev ?? { score: 0, label: "Low", breakdown: {} });
     } finally {
@@ -128,22 +124,19 @@ export default function IsolationOverviewScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  // Build highlight cards based on features + prefs
+  // Build highlight cards
   const highlights = useMemo(() => {
     if (!features || !prefs) return [];
-
     const list = [];
 
     if (prefs.gps) {
       list.push({ label: "Daily distance", value: formatMeters(features.dailyDistanceMeters) });
-      list.push({ label: "Time at home", value: `${Math.round(features.timeAtHomePct || 0)}%` });
+      list.push({ label: "Time at home",   value: `${Math.round(features.timeAtHomePct || 0)}%` });
     } else {
       list.push({ label: "Daily distance", value: "Off" });
-      list.push({ label: "Time at home", value: "Off" });
+      list.push({ label: "Time at home",   value: "Off" });
     }
 
     if (prefs.calls || prefs.sms) {
@@ -158,22 +151,22 @@ export default function IsolationOverviewScreen({ navigation }) {
       list.push({ label: "Night usage", value: "Off" });
     }
 
-    if (prefs.wifi) {
-      const w = features.wifiDiversity ?? 0;
-      const wifiLabel = w < 0.4 ? "Low" : w < 0.9 ? "Medium" : "High";
-      list.push({ label: "WiFi diversity", value: wifiLabel });
-    } else {
-      list.push({ label: "WiFi diversity", value: "Off" });
-    }
-
     return list.slice(0, 4);
   }, [features, prefs]);
 
+  // Build summary sentence from risk reasons
   const summary = useMemo(() => {
-    if (!features) return "";
-    return buildSummary(features);
-  }, [features]);
+    if (!risk.reasons?.length) {
+      return "Your recent patterns look balanced. Keep maintaining healthy social exposure.";
+    }
+    const top = risk.reasons.filter((r) => r.risk > 0.3).slice(0, 2);
+    if (!top.length) {
+      return "No significant risk factors detected this week. Keep it up!";
+    }
+    return top.map((r) => r.title).join(" + ") + " detected over the last 7 days.";
+  }, [risk]);
 
+  // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
       <ScreenBackground>
@@ -185,13 +178,16 @@ export default function IsolationOverviewScreen({ navigation }) {
     );
   }
 
+  // ─── Main render ──────────────────────────────────────────────────────────
   return (
     <ScreenBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>📍 Social Well-being</Text>
-        <Text style={styles.sub}>Loneliness risk based on mobility + communication + behaviour.</Text>
+        <Text style={styles.sub}>
+          Loneliness risk based on mobility + communication + behaviour.
+        </Text>
 
-        {/* If something failed */}
+        {/* Error card */}
         {!!errorMsg && (
           <GlassCard
             icon="alert-circle-outline"
@@ -200,7 +196,6 @@ export default function IsolationOverviewScreen({ navigation }) {
             style={{ marginTop: spacing.lg }}
           >
             <Text style={styles.body}>{errorMsg}</Text>
-
             <View style={{ height: spacing.md }} />
             <Pressable style={styles.bigBtn} onPress={loadData}>
               <Text style={styles.bigBtnText}>Retry</Text>
@@ -209,7 +204,7 @@ export default function IsolationOverviewScreen({ navigation }) {
           </GlassCard>
         )}
 
-        {/* Permission Warning (only when required permissions missing) */}
+        {/* Permission warning */}
         {!hasPermissions && (
           <GlassCard
             icon="warning-outline"
@@ -218,12 +213,9 @@ export default function IsolationOverviewScreen({ navigation }) {
             style={{ marginTop: spacing.lg }}
           >
             <Text style={styles.body}>
-              Some features are turned ON in Privacy, but required permissions are not granted.
-              Please open Privacy & Consent and enable the needed permissions.
+              Location permission is required for GPS mobility tracking. Go to Privacy to enable it.
             </Text>
-
             <View style={{ height: spacing.md }} />
-
             <PrimaryButton
               title="Go to Privacy Settings"
               onPress={() => navigation.navigate("IsolationPrivacy")}
@@ -231,7 +223,7 @@ export default function IsolationOverviewScreen({ navigation }) {
           </GlassCard>
         )}
 
-        {/* Main Risk Card */}
+        {/* Main risk card */}
         <GlassCard
           icon="alert-circle-outline"
           title={`Risk: ${risk.label}`}
@@ -242,7 +234,6 @@ export default function IsolationOverviewScreen({ navigation }) {
 
           <View style={{ height: spacing.md }} />
           <Text style={styles.body}>{summary}</Text>
-
           <View style={{ height: spacing.md }} />
 
           <Pressable style={styles.bigBtn} onPress={() => navigation.navigate("IsolationStats")}>
@@ -256,10 +247,17 @@ export default function IsolationOverviewScreen({ navigation }) {
             <Text style={styles.bigBtnText}>Why this risk?</Text>
             <Icon name="chevron-forward" size={18} color={colors.text} />
           </Pressable>
+
+          <View style={{ height: spacing.sm }} />
+
+          <Pressable style={styles.bigBtn} onPress={() => navigation.navigate("IsolationSuggestions")}>
+            <Text style={styles.bigBtnText}>See Suggestions</Text>
+            <Icon name="chevron-forward" size={18} color={colors.text} />
+          </Pressable>
         </GlassCard>
 
+        {/* Highlights */}
         <Text style={styles.sectionTitle}>Quick highlights</Text>
-
         <View style={styles.grid}>
           {highlights.map((x) => (
             <View key={x.label} style={styles.statCard}>
@@ -269,45 +267,71 @@ export default function IsolationOverviewScreen({ navigation }) {
           ))}
         </View>
 
+        {/* Breakdown pills */}
+        {risk.used?.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>Score breakdown</Text>
+            <View style={styles.breakdownRow}>
+              {risk.used.map((pillar) => (
+                <View key={pillar} style={styles.breakdownPill}>
+                  <Text style={styles.breakdownPillLabel}>{pillar}</Text>
+                  <Text style={styles.breakdownPillValue}>
+                    {risk.breakdown?.[pillar] ?? 0}/
+                    {Math.round(100 / (risk.used.length || 1))}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </ScreenBackground>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { padding: spacing.lg, paddingTop: spacing.xl, flexGrow: 1 },
-  title: { color: colors.text, fontSize: 26, fontWeight: "900" },
-  sub: { color: colors.muted, marginTop: 6, lineHeight: 18 },
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
-  body: { color: colors.faint, lineHeight: 18 },
+const styles = StyleSheet.create({
+  container:  { padding: spacing.lg, paddingTop: spacing.xl, flexGrow: 1 },
+  title:      { color: colors.text, fontSize: 26, fontWeight: "900" },
+  sub:        { color: colors.muted, marginTop: 6, lineHeight: 18 },
+  body:       { color: colors.faint, lineHeight: 18 },
 
   bigBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderRadius: 16,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 14, paddingHorizontal: 14, borderRadius: 16,
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1, borderColor: colors.border,
   },
   bigBtnText: { color: colors.text, fontWeight: "900" },
 
   sectionTitle: { color: colors.text, fontWeight: "900", marginTop: spacing.lg, fontSize: 16 },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginTop: spacing.md },
+
+  grid: {
+    flexDirection: "row", flexWrap: "wrap",
+    justifyContent: "space-between", marginTop: spacing.md,
+  },
   statCard: {
     width: "48%",
     backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 18,
-    padding: spacing.md,
-    marginBottom: spacing.md,
+    borderWidth: 1, borderColor: colors.border,
+    borderRadius: 18, padding: spacing.md, marginBottom: spacing.md,
   },
   statLabel: { color: colors.muted, fontWeight: "800", fontSize: 12 },
   statValue: { color: colors.text, fontWeight: "900", fontSize: 18, marginTop: 6 },
+
+  breakdownRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: spacing.sm },
+  breakdownPill: {
+    flexDirection: "row", gap: 6, alignItems: "center",
+    paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(124,58,237,0.15)",
+    borderWidth: 1, borderColor: "rgba(124,58,237,0.3)",
+  },
+  breakdownPillLabel: { color: colors.muted, fontWeight: "800", fontSize: 12 },
+  breakdownPillValue: { color: colors.text, fontWeight: "900", fontSize: 12 },
 
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg },
   loadingText: { marginTop: spacing.md, color: colors.muted, fontWeight: "700" },
