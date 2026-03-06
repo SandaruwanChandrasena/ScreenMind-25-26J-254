@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
@@ -83,7 +83,7 @@ export default function IsolationSuggestionsScreen({ navigation }) {
   }, []);
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Suggestions</Text>
         <Text style={styles.sub}>
@@ -157,7 +157,7 @@ export default function IsolationSuggestionsScreen({ navigation }) {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

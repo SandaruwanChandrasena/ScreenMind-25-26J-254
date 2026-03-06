@@ -8,7 +8,7 @@
 
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from "react-native";
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
@@ -72,7 +72,7 @@ export default function IsolationWhyScreen() {
   }, []);
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Why this risk?</Text>
         <Text style={styles.sub}>
@@ -141,7 +141,7 @@ export default function IsolationWhyScreen() {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

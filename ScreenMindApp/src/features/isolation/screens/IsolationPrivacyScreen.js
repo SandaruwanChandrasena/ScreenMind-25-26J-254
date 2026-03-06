@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, Switch, Pressable, Alert } from "react-native";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
@@ -134,7 +134,7 @@ export default function IsolationPrivacyScreen() {
   };
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Privacy & Consent</Text>
         <Text style={styles.sub}>
@@ -214,7 +214,7 @@ export default function IsolationPrivacyScreen() {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 
@@ -123,7 +123,7 @@ export default function IsolationStatsScreen({ navigation }) {
   const listData  = mode === "Social" ? ui.socialItems : ui.withdrawItems;
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
         {/* Header */}
@@ -309,7 +309,7 @@ export default function IsolationStatsScreen({ navigation }) {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

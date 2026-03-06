@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, ScrollView, ActivityIndicator, 
   Pressable, NativeModules, PermissionsAndroid, Platform 
 } from "react-native";
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
@@ -92,7 +92,7 @@ export default function ProximityExposureScreen() {
   }, []);
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>📡 Proximity & Environment</Text>
         <Text style={styles.sub}>Real-time scan proxies for face-to-face exposure and environment variety.</Text>
@@ -140,7 +140,7 @@ export default function ProximityExposureScreen() {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

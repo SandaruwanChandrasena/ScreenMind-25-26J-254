@@ -18,7 +18,7 @@ import {
 import Icon from "react-native-vector-icons/Ionicons";
 import { RESULTS } from "../services/permissionHelper";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
@@ -169,18 +169,18 @@ export default function IsolationOverviewScreen({ navigation }) {
   // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <ScreenBackground>
+      <DashboardBackground>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" />
           <Text style={styles.loadingText}>Loading social well-being…</Text>
         </View>
-      </ScreenBackground>
+      </DashboardBackground>
     );
   }
 
   // ─── Main render ──────────────────────────────────────────────────────────
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>📍 Social Well-being</Text>
         <Text style={styles.sub}>
@@ -287,7 +287,7 @@ export default function IsolationOverviewScreen({ navigation }) {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 
