@@ -20,22 +20,67 @@ import { NativeModules, Platform } from "react-native";
 import RNAndroidNotificationListener
   from "react-native-android-notification-listener";
 
-const { SettingsAccess } = NativeModules;
+// ── Safely get native module with null check ──
+const SettingsAccess = NativeModules?.SettingsAccess || null;
+
+// ── Helper to check if native module is available ──
+const isSettingsAccessAvailable = () => SettingsAccess !== null;
 
 export const settingsAccess = {
 
-  // ── UNCHANGED (keep exactly as is) ──
-  hasUsageStatsAccess: async () =>
-    SettingsAccess.hasUsageStatsAccess(),
+  // ── Usage stats access (native bridge) ──
+  hasUsageStatsAccess: async () => {
+    if (!isSettingsAccessAvailable()) {
+      console.warn("⚠️ SettingsAccess native module not available");
+      return false;
+    }
+    try {
+      return await SettingsAccess.hasUsageStatsAccess();
+    } catch (e) {
+      console.error("Usage stats access error:", e.message);
+      return false;
+    }
+  },
 
-  hasDndAccess: async () =>
-    SettingsAccess.hasDndAccess(),
+  // ── DND access (native bridge) ──
+  hasDndAccess: async () => {
+    if (!isSettingsAccessAvailable()) {
+      console.warn("⚠️ SettingsAccess native module not available");
+      return false;
+    }
+    try {
+      return await SettingsAccess.hasDndAccess();
+    } catch (e) {
+      console.error("DND access error:", e.message);
+      return false;
+    }
+  },
 
-  openUsageAccessSettings: () =>
-    SettingsAccess.openUsageAccessSettings(),
+  // ── Open usage access settings ──
+  openUsageAccessSettings: () => {
+    if (!isSettingsAccessAvailable()) {
+      console.warn("⚠️ Cannot open settings: SettingsAccess module not available");
+      return;
+    }
+    try {
+      SettingsAccess.openUsageAccessSettings();
+    } catch (e) {
+      console.error("Open usage access settings error:", e.message);
+    }
+  },
 
-  openDndAccessSettings: () =>
-    SettingsAccess.openDndAccessSettings(),
+  // ── Open DND settings ──
+  openDndAccessSettings: () => {
+    if (!isSettingsAccessAvailable()) {
+      console.warn("⚠️ Cannot open settings: SettingsAccess module not available");
+      return;
+    }
+    try {
+      SettingsAccess.openDndAccessSettings();
+    } catch (e) {
+      console.error("Open DND settings error:", e.message);
+    }
+  },
 
   // ── CHANGED: was using SettingsAccess native bridge ──
   // ── NOW: uses library instead ──

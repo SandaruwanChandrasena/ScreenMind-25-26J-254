@@ -113,15 +113,17 @@ export default function SleepHomeScreen({ navigation }) {
 
   const checkPermissions = async () => {
     try {
-      const usage = await settingsAccess.hasUsageStatsAccess();
-      const notif = await settingsAccess.hasNotificationListenerAccess();
-      const dnd = await settingsAccess.hasDndAccess();
+      const usage = await settingsAccess.hasUsageStatsAccess?.();
+      const notif = await settingsAccess.hasNotificationListenerAccess?.();
+      const dnd = await settingsAccess.hasDndAccess?.();
 
-      console.log("Usage access:", usage);
-      console.log("Notification access:", notif);
-      console.log("DND access:", dnd);
+      console.log("✅ Permissions checked:");
+      console.log("  Usage access:", usage ?? false);
+      console.log("  Notification access:", notif ?? false);
+      console.log("  DND access:", dnd ?? false);
     } catch (e) {
-      console.log("Permission check error:", e);
+      console.error("Permission check error:", e.message || e);
+      // Non-blocking: permissions check failure doesn't prevent app from running
     }
   };
 
