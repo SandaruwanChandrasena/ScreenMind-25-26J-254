@@ -3,27 +3,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SETTINGS_KEY = 'sm_alert_settings';
 
 export const DEFAULT_SETTINGS = {
-  sensitivity:          'Medium',
-  negativeCount:        5,
-  timeWindowMins:       5,
-  alertHighRisk:        true,   // ✅ Alert me on High Risk
-  dailyJournalReminder: false,  // ✅ Daily Journal Reminder
+  sensitivity: 'Medium',
+  negativeCount: 5,
+  timeWindowMins: 5,
+  alertHighRisk: true,
+  dailyJournalReminder: false,
+  journalReminderInterval: null, // '5s' | '5h' | '12h'
 };
 
 export const SENSITIVITY_PRESETS = {
-  Low:    { negativeCount: 7, timeWindowMins: 15 },
-  Medium: { negativeCount: 5, timeWindowMins: 5  },
-  High:   { negativeCount: 3, timeWindowMins: 3  },
+  Low: { negativeCount: 7, timeWindowMins: 15 },
+  Medium: { negativeCount: 5, timeWindowMins: 5 },
+  High: { negativeCount: 3, timeWindowMins: 3 },
 };
 
-export const TIME_WINDOW_OPTIONS   = [3, 5, 10, 15];
+export const TIME_WINDOW_OPTIONS = [3, 5, 10, 15];
 export const MESSAGE_COUNT_OPTIONS = [3, 4, 5, 6, 7];
 
 export async function saveAlertSettings(settings) {
   try {
     // Merge with existing so we never lose other fields
     const existing = await loadAlertSettings();
-    const merged   = { ...existing, ...settings };
+    const merged = { ...existing, ...settings };
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(merged));
     console.log('✅ Settings saved:', merged);
   } catch (e) {

@@ -14,16 +14,25 @@ export default function App() {
   const overlayShownRef = useRef(false); // ✅ guard — prevents re-showing
 
   const checkOverlayTrigger = async () => {
-    if (overlayShownRef.current) return; // ✅ skip if already showing
+    if (overlayShownRef.current) return;
     try {
+      // ✅ Check if user has Alert on High Risk enabled
+      const settingsRaw = await AsyncStorage.getItem('sm_alert_settings');
+      const settings = settingsRaw ? JSON.parse(settingsRaw) : {};
+      if (settings.alertHighRisk === false) {
+        // User turned off alerts — clear any pending trigger and skip
+        await AsyncStorage.removeItem('sm_overlay_trigger');
+        return;
+      }
+
       const raw = await AsyncStorage.getItem(OVERLAY_KEY);
       if (!raw) return;
       const data = JSON.parse(raw);
       if (data?.show) {
-        overlayShownRef.current = true; // ✅ mark as shown
+        overlayShownRef.current = true;
         setOverlayRiskScore(data.risk_score || 0);
         setOverlayVisible(true);
-        await AsyncStorage.removeItem(OVERLAY_KEY); // ✅ clear immediately
+        await AsyncStorage.removeItem(OVERLAY_KEY);
       }
     } catch (e) {}
   };

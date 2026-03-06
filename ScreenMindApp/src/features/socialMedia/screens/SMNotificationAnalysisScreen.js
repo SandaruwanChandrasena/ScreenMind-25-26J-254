@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import notifee, { TriggerType, RepeatFrequency } from '@notifee/react-native';
 import DashboardBackground from '../../../components/DashboardBackground';
 import { colors } from '../../../theme/colors';
 import { spacing } from '../../../theme/spacing';
@@ -29,6 +30,18 @@ import {
 
 const BUFFER_KEY = 'sm_message_buffer';
 
+// Journal reminder interval options
+const INTERVAL_OPTIONS = [
+  { key: '5s', label: '5 Sec', ms: 5 * 1000, display: 'Demo' },
+  { key: '5h', label: '5 Hours', ms: 5 * 60 * 60 * 1000, display: 'After 5h' },
+  {
+    key: '12h',
+    label: '12 Hours',
+    ms: 12 * 60 * 60 * 1000,
+    display: 'After 12h',
+  },
+];
+
 export default function SMNotificationAnalysisScreen() {
   const [notifAccessEnabled, setNotifAccessEnabled] = useState(false);
   const [monitorWhatsApp, setMonitorWhatsApp] = useState(true);
@@ -37,6 +50,7 @@ export default function SMNotificationAnalysisScreen() {
   const [monitorTikTok, setMonitorTikTok] = useState(false);
   const [alertHighRisk, setAlertHighRisk] = useState(true);
   const [dailyJournalReminder, setDailyJournalReminder] = useState(false);
+  const [journalReminderInterval, setJournalReminderInterval] = useState(null);
   const [sensitivity, setSensitivity] = useState('Medium');
   const [negativeCount, setNegativeCount] = useState(5);
   const [timeWindowMins, setTimeWindowMins] = useState(5);
@@ -101,6 +115,7 @@ export default function SMNotificationAnalysisScreen() {
       setTimeWindowMins(saved.timeWindowMins);
       setAlertHighRisk(saved.alertHighRisk ?? true);
       setDailyJournalReminder(saved.dailyJournalReminder ?? false);
+      setJournalReminderInterval(saved.journalReminderInterval ?? null);
 
       // Load monitored apps
       const raw = await AsyncStorage.getItem('sm_monitor_apps');
@@ -250,7 +265,71 @@ export default function SMNotificationAnalysisScreen() {
     }
   };
 
-  // ── Overlay Permission ─────────────────────────────────────────
+  // ── Journal Reminder ───────────────────────────────────────────
+  const scheduleJournalReminder = async intervalKey => {
+    try {
+      // Cancel any existing reminder first
+      await cancelJournalReminder();
+
+      const option = INTERVAL_OPTIONS.find(o => o.key === intervalKey);
+      if (!option) return;
+
+      // Create notification channel
+      const channelId = await notifee.createChannel({
+        id: 'journal_reminder',
+        name: 'Journal Reminder',
+      });
+
+      // Schedule trigger notification
+      const triggerTime = Date.now() + option.ms;
+      await notifee.createTriggerNotification(
+        {
+          id: 'journal_reminder',
+          title: '📓 Time to Journal',
+          body: 'Take a moment to reflect on your day. How are you feeling? 💙',
+          android: {
+            channelId,
+            smallIcon: 'ic_launcher',
+            pressAction: { id: 'default' },
+          },
+        },
+        {
+          type: TriggerType.TIMESTAMP,
+          timestamp: triggerTime,
+        },
+      );
+
+      // Save interval preference
+      setJournalReminderInterval(intervalKey);
+      await saveAlertSettings({ journalReminderInterval: intervalKey });
+      console.log(`📓 Journal reminder scheduled → ${option.label}`);
+    } catch (e) {
+      console.log('❌ Schedule reminder error:', e);
+    }
+  };
+
+  const cancelJournalReminder = async () => {
+    try {
+      await notifee.cancelNotification('journal_reminder');
+      console.log('📓 Journal reminder cancelled');
+    } catch (e) {}
+  };
+
+  const handleJournalReminderToggle = async value => {
+    setDailyJournalReminder(value);
+    await saveAlertSettings({ dailyJournalReminder: value });
+    if (!value) {
+      // Turned OFF — cancel reminder and clear interval
+      await cancelJournalReminder();
+      setJournalReminderInterval(null);
+      await saveAlertSettings({ journalReminderInterval: null });
+    }
+  };
+
+  const handleIntervalSelect = async key => {
+    setJournalReminderInterval(key);
+    await scheduleJournalReminder(key);
+  };
   const [overlayPermission, setOverlayPermission] = useState(false);
 
   useEffect(() => {
@@ -552,12 +631,67 @@ export default function SMNotificationAnalysisScreen() {
                 title="Daily Journal Reminder"
                 subtitle="Gentle daily prompt to reflect"
                 value={dailyJournalReminder}
-                onChange={v => {
-                  setDailyJournalReminder(v);
-                  saveAlertSettings({ dailyJournalReminder: v });
-                  console.log(`📓 Journal Reminder: ${v}`);
-                }}
+                onChange={handleJournalReminderToggle}
               />
+
+              {/* ── Journal Reminder Interval Picker ── */}
+              {dailyJournalReminder && (
+                <View style={styles.journalPickerBox}>
+                  <Text style={styles.settingTitle}>Remind me after</Text>
+                  <Text style={styles.settingSub}>
+                    Choose when to receive your journal reminder.
+                  </Text>
+                  <View style={styles.pillRow}>
+                    {INTERVAL_OPTIONS.map(opt => (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[
+                          styles.journalPill,
+                          journalReminderInterval === opt.key &&
+                            styles.journalPillActive,
+                        ]}
+                        onPress={() => handleIntervalSelect(opt.key)}
+                      >
+                        <Text
+                          style={[
+                            styles.journalPillText,
+                            journalReminderInterval === opt.key &&
+                              styles.journalPillTextActive,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.journalPillSub,
+                            journalReminderInterval === opt.key && {
+                              color: '#22C55E',
+                            },
+                          ]}
+                        >
+                          {opt.display}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {journalReminderInterval && (
+                    <View style={styles.journalScheduledBadge}>
+                      <Text style={styles.journalScheduledText}>
+                        ✅ Reminder set —{' '}
+                        <Text style={{ color: '#22C55E', fontWeight: '900' }}>
+                          {
+                            INTERVAL_OPTIONS.find(
+                              o => o.key === journalReminderInterval,
+                            )?.label
+                          }
+                        </Text>{' '}
+                        from now
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
 
               <View style={styles.divider} />
 
@@ -1048,4 +1182,46 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
   },
+
+  // ── Journal Reminder styles ──
+  journalPickerBox: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: 14,
+    backgroundColor: 'rgba(34,197,94,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.20)',
+  },
+  journalPill: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    minWidth: 80,
+  },
+  journalPillActive: {
+    backgroundColor: 'rgba(34,197,94,0.15)',
+    borderColor: '#22C55E',
+  },
+  journalPillText: { color: '#9CA3AF', fontWeight: '800', fontSize: 13 },
+  journalPillTextActive: { color: '#22C55E' },
+  journalPillSub: {
+    color: '#4B5563',
+    fontSize: 10,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  journalScheduledBadge: {
+    marginTop: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: 10,
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,197,94,0.25)',
+    alignItems: 'center',
+  },
+  journalScheduledText: { color: colors.muted, fontSize: 12, lineHeight: 18 },
 });
