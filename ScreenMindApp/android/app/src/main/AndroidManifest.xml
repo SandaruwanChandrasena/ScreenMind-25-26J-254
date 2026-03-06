@@ -41,6 +41,12 @@
     <!-- Lock Screen (Social Media) -->
     <uses-permission android:name="android.permission.BIND_DEVICE_ADMIN" />
 
+    <!-- System Overlay (Social Media - draw over other apps) -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Foreground Service (Overlay) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
     <!-- Optional -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
@@ -106,6 +112,12 @@
         </service>
 
         <!-- ===================== -->
+        <!-- Overlay Service (Social Media - system overlay) -->
+        <service
+            android:name=".socialmedia.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
+
         <!-- Device Admin Receiver (Social Media - Lock Screen) -->
         <!-- ===================== -->
         <receiver

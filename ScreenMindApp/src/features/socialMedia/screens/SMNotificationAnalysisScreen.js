@@ -220,6 +220,25 @@ export default function SMNotificationAnalysisScreen() {
     }
   };
 
+  // ── Overlay Permission ─────────────────────────────────────────
+  const [overlayPermission, setOverlayPermission] = useState(false);
+
+  useEffect(() => {
+    const { OverlayModule } = require('react-native').NativeModules;
+    if (OverlayModule) {
+      OverlayModule.hasPermission(granted => {
+        setOverlayPermission(granted);
+      });
+    }
+  }, []);
+
+  const handleRequestOverlayPermission = () => {
+    const { OverlayModule } = require('react-native').NativeModules;
+    if (OverlayModule) {
+      OverlayModule.requestPermission();
+    }
+  };
+
   // ── Sub-components ─────────────────────────────────────────────
   const SettingRow = ({ title, subtitle, value, onChange }) => (
     <View style={styles.settingRow}>
@@ -357,6 +376,61 @@ export default function SMNotificationAnalysisScreen() {
               thumbColor={notifAccessEnabled ? '#22C55E' : '#9CA3AF'}
             />
           </View>
+        </View>
+
+        {/* ── Overlay Permission Card ── */}
+        <View style={{ height: spacing.md }} />
+        <View
+          style={[
+            styles.ethicsCard,
+            {
+              borderColor: overlayPermission
+                ? 'rgba(34,197,94,0.35)'
+                : 'rgba(239,68,68,0.35)',
+            },
+          ]}
+        >
+          <View style={styles.masterRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.masterTitle}>🪟 Draw Over Other Apps</Text>
+              <Text style={styles.masterSub}>
+                Required to show emotional alerts on top of any app or home
+                screen.
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor: overlayPermission
+                    ? 'rgba(34,197,94,0.16)'
+                    : 'rgba(239,68,68,0.14)',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  { color: overlayPermission ? '#22C55E' : '#EF4444' },
+                ]}
+              >
+                {overlayPermission ? 'ON' : 'OFF'}
+              </Text>
+            </View>
+          </View>
+          {!overlayPermission && (
+            <>
+              <View style={{ height: spacing.sm }} />
+              <TouchableOpacity
+                style={styles.resetBtn}
+                onPress={handleRequestOverlayPermission}
+              >
+                <Text style={styles.resetBtnText}>
+                  ⚙️ Grant Permission — Draw Over Apps
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {notifAccessEnabled && (

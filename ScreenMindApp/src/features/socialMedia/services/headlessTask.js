@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { PYTHON_BACKEND_URL } from '@env';
+import { NativeModules } from 'react-native';
 
 // ─────────────────────────────────────────────
 // ✅ WHITELIST
@@ -155,9 +156,25 @@ async function isCooldownActive() {
 
 // ─────────────────────────────────────────────
 // ✅ TRIGGER OVERLAY
+// 1. Calls native OverlayModule → shows over ALL apps
+// 2. Also saves to AsyncStorage → shows inside app (fallback)
 // ─────────────────────────────────────────────
 async function triggerOverlay(avgScore, riskLevel) {
   try {
+    // ✅ Native system overlay — works outside app
+    const { OverlayModule } = NativeModules;
+    if (OverlayModule) {
+      OverlayModule.showOverlay(avgScore);
+      console.log(
+        `🚨 Native overlay shown → ${riskLevel} (${avgScore.toFixed(2)})`,
+      );
+    } else {
+      console.log(
+        '⚠️ OverlayModule not available — falling back to AsyncStorage',
+      );
+    }
+
+    // ✅ AsyncStorage fallback — shows inside app
     await AsyncStorage.setItem(
       OVERLAY_KEY,
       JSON.stringify({

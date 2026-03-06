@@ -17,6 +17,7 @@ import com.screenmindapp.sleep.SleepEventPackage
 
 // ✅ Social Media native modules
 import com.screenmindapp.socialmedia.DeviceControlPackage
+import com.screenmindapp.socialmedia.OverlayPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -36,6 +37,7 @@ class MainApplication : Application(), ReactApplication {
 
           // ✅ Social Media native packages
           add(DeviceControlPackage())
+          add(OverlayPackage())
 
         },
     )
