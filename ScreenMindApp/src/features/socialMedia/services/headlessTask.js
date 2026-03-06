@@ -27,35 +27,47 @@ const BUFFER_KEY = 'sm_message_buffer';
 const COOLDOWN_KEY = 'sm_alert_cooldown';
 const OVERLAY_KEY = 'sm_overlay_trigger';
 const SETTINGS_KEY = 'sm_alert_settings';
-const MAX_BUFFER_SIZE = 20; // store up to 20 messages, filter by time
+const MONITOR_APPS_KEY = 'sm_monitor_apps'; // ✅ NEW — which apps to monitor
+const MAX_BUFFER_SIZE = 20;
 const HIGH_THRESHOLD = 0.7;
 const MED_THRESHOLD = 0.4;
 
-// Default settings (used if user hasn't customized)
-const DEFAULT_TIME_WINDOW_MINS = 10; // messages older than this are expired
-const DEFAULT_MIN_MESSAGES = 3; // minimum messages needed to trigger alert
+const DEFAULT_TIME_WINDOW_MINS = 10;
+const DEFAULT_MIN_MESSAGES = 3;
+
+// Default monitored apps (all ON by default)
+const DEFAULT_MONITOR_APPS = {
+  'com.whatsapp': true,
+  'com.facebook.katana': false,
+  'com.instagram.android': false,
+  'com.zhiliaoapp.musically': false,
+};
 
 // ─────────────────────────────────────────────
 // ✅ LOAD USER SETTINGS
-// Reads timeWindowMins and negativeCount from UI settings
+// Reads timeWindowMins, negativeCount, and monitored apps from UI
 // ─────────────────────────────────────────────
 async function loadSettings() {
   try {
     const raw = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (!raw)
-      return {
-        timeWindowMins: DEFAULT_TIME_WINDOW_MINS,
-        minMessages: DEFAULT_MIN_MESSAGES,
-      };
-    const saved = JSON.parse(raw);
+    const monitorRaw = await AsyncStorage.getItem(MONITOR_APPS_KEY);
+
+    const settings = raw ? JSON.parse(raw) : {};
+    const monitorApps = monitorRaw
+      ? JSON.parse(monitorRaw)
+      : DEFAULT_MONITOR_APPS;
+
     return {
-      timeWindowMins: saved.timeWindowMins || DEFAULT_TIME_WINDOW_MINS,
-      minMessages: saved.negativeCount || DEFAULT_MIN_MESSAGES,
+      timeWindowMins: settings.timeWindowMins || DEFAULT_TIME_WINDOW_MINS,
+      minMessages: settings.negativeCount || DEFAULT_MIN_MESSAGES,
+      alertHighRisk: settings.alertHighRisk !== false, // default true
+      monitorApps,
     };
   } catch (e) {
     return {
       timeWindowMins: DEFAULT_TIME_WINDOW_MINS,
       minMessages: DEFAULT_MIN_MESSAGES,
+      monitorApps: DEFAULT_MONITOR_APPS,
     };
   }
 }
@@ -208,9 +220,17 @@ export default async function headlessTask({ notification }) {
     const pkg = parsed.app;
     const text = parsed.text || '';
 
-    // 2️⃣ Whitelist check
+    // 2️⃣ Whitelist check — only allow whitelisted packages
     if (!SOCIAL_APP_WHITELIST.includes(pkg)) {
-      console.log(`🚫 Ignored: ${pkg}`);
+      console.log(`🚫 Ignored (not social): ${pkg}`);
+      return;
+    }
+
+    // 2️⃣b User toggle check — skip if user turned OFF this app in settings
+    const { timeWindowMins, minMessages, monitorApps, alertHighRisk } =
+      await loadSettings();
+    if (monitorApps[pkg] === false) {
+      console.log(`🔕 Ignored (monitoring OFF): ${APP_NAMES[pkg] || pkg}`);
       return;
     }
 
@@ -236,8 +256,7 @@ export default async function headlessTask({ notification }) {
     const score = parseFloat(result.sentiment?.negative) / 100 || 0.0;
     console.log(`🔍 label=${label}, score=${score.toFixed(2)}`);
 
-    // 7️⃣ Load settings from UI (timeWindowMins + minMessages)
-    const { timeWindowMins, minMessages } = await loadSettings();
+    // 7️⃣ Use already-loaded settings for time window calculation
     const windowMs = timeWindowMins * 60 * 1000; // convert to milliseconds
     const cutoffTime = Date.now() - windowMs;
 
@@ -302,10 +321,14 @@ export default async function headlessTask({ notification }) {
       minMessages,
     );
 
-    // 1️⃣7️⃣ Trigger overlay only for HIGH + no cooldown
+    // 1️⃣7️⃣ Trigger overlay only for HIGH + no cooldown + alertHighRisk enabled
     if (riskLevel === 'HIGH') {
       const onCooldown = await isCooldownActive();
-      if (!onCooldown) {
+      if (onCooldown) {
+        console.log('⏳ Skipping overlay — cooldown active');
+      } else if (!alertHighRisk) {
+        console.log('🔕 Skipping overlay — Alert on High Risk is OFF');
+      } else {
         await triggerOverlay(avgScore, riskLevel);
       }
     }

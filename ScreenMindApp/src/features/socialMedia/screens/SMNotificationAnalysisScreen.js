@@ -32,8 +32,9 @@ const BUFFER_KEY = 'sm_message_buffer';
 export default function SMNotificationAnalysisScreen() {
   const [notifAccessEnabled, setNotifAccessEnabled] = useState(false);
   const [monitorWhatsApp, setMonitorWhatsApp] = useState(true);
-  const [monitorMessenger, setMonitorMessenger] = useState(false);
+  const [monitorFacebook, setMonitorFacebook] = useState(false);
   const [monitorInstagram, setMonitorInstagram] = useState(false);
+  const [monitorTikTok, setMonitorTikTok] = useState(false);
   const [alertHighRisk, setAlertHighRisk] = useState(true);
   const [dailyJournalReminder, setDailyJournalReminder] = useState(false);
   const [sensitivity, setSensitivity] = useState('Medium');
@@ -98,9 +99,38 @@ export default function SMNotificationAnalysisScreen() {
       setSensitivity(saved.sensitivity);
       setNegativeCount(saved.negativeCount);
       setTimeWindowMins(saved.timeWindowMins);
+      setAlertHighRisk(saved.alertHighRisk ?? true);
+      setDailyJournalReminder(saved.dailyJournalReminder ?? false);
+
+      // Load monitored apps
+      const raw = await AsyncStorage.getItem('sm_monitor_apps');
+      if (raw) {
+        const apps = JSON.parse(raw);
+        setMonitorWhatsApp(apps['com.whatsapp'] ?? true);
+        setMonitorFacebook(apps['com.facebook.katana'] ?? false);
+        setMonitorInstagram(apps['com.instagram.android'] ?? false);
+        setMonitorTikTok(apps['com.zhiliaoapp.musically'] ?? false);
+      }
     };
     loadSettings();
   }, []);
+
+  // ── Save monitored apps helper ─────────────────────────────────
+  const saveMonitorApps = async (whatsapp, facebook, instagram, tiktok) => {
+    try {
+      await AsyncStorage.setItem(
+        'sm_monitor_apps',
+        JSON.stringify({
+          'com.whatsapp': whatsapp,
+          'com.facebook.katana': facebook,
+          'com.instagram.android': instagram,
+          'com.zhiliaoapp.musically': tiktok,
+        }),
+      );
+    } catch (e) {
+      console.log('❌ Save monitor apps error:', e);
+    }
+  };
 
   // ── Live Window + Cooldown Timer ───────────────────────────────
   // Reads buffer + cooldown every second
@@ -447,19 +477,57 @@ export default function SMNotificationAnalysisScreen() {
                 title="Monitor WhatsApp"
                 subtitle="Analyze notification tone & frequency"
                 value={monitorWhatsApp}
-                onChange={setMonitorWhatsApp}
+                onChange={v => {
+                  setMonitorWhatsApp(v);
+                  saveMonitorApps(
+                    v,
+                    monitorFacebook,
+                    monitorInstagram,
+                    monitorTikTok,
+                  );
+                }}
               />
               <SettingRow
-                title="Monitor Messenger"
+                title="Monitor Facebook"
                 subtitle="Analyze notification tone & frequency"
-                value={monitorMessenger}
-                onChange={setMonitorMessenger}
+                value={monitorFacebook}
+                onChange={v => {
+                  setMonitorFacebook(v);
+                  saveMonitorApps(
+                    monitorWhatsApp,
+                    v,
+                    monitorInstagram,
+                    monitorTikTok,
+                  );
+                }}
               />
               <SettingRow
                 title="Monitor Instagram"
                 subtitle="Analyze notification tone & frequency"
                 value={monitorInstagram}
-                onChange={setMonitorInstagram}
+                onChange={v => {
+                  setMonitorInstagram(v);
+                  saveMonitorApps(
+                    monitorWhatsApp,
+                    monitorFacebook,
+                    v,
+                    monitorTikTok,
+                  );
+                }}
+              />
+              <SettingRow
+                title="Monitor TikTok"
+                subtitle="Analyze notification tone & frequency"
+                value={monitorTikTok}
+                onChange={v => {
+                  setMonitorTikTok(v);
+                  saveMonitorApps(
+                    monitorWhatsApp,
+                    monitorFacebook,
+                    monitorInstagram,
+                    v,
+                  );
+                }}
               />
 
               <View style={styles.divider} />
@@ -474,13 +542,21 @@ export default function SMNotificationAnalysisScreen() {
                 title="Alert me on High Risk"
                 subtitle="Get notified when risk goes above threshold"
                 value={alertHighRisk}
-                onChange={setAlertHighRisk}
+                onChange={v => {
+                  setAlertHighRisk(v);
+                  saveAlertSettings({ alertHighRisk: v });
+                  console.log(`🔔 Alert High Risk: ${v}`);
+                }}
               />
               <SettingRow
                 title="Daily Journal Reminder"
                 subtitle="Gentle daily prompt to reflect"
                 value={dailyJournalReminder}
-                onChange={setDailyJournalReminder}
+                onChange={v => {
+                  setDailyJournalReminder(v);
+                  saveAlertSettings({ dailyJournalReminder: v });
+                  console.log(`📓 Journal Reminder: ${v}`);
+                }}
               />
 
               <View style={styles.divider} />
