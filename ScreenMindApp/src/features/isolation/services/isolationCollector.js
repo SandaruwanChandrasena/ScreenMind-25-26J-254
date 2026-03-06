@@ -126,6 +126,41 @@ async function collectBluetoothCount(seconds = 8) {
   });
 }
 
+export async function scanBluetoothCountOnce(seconds = 8) {
+  return collectBluetoothCount(seconds);
+}
+
+export async function getScreenTimeLast24hMs() {
+  if (Platform.OS !== "android") return 0;
+
+  try {
+    if (BehaviourMetrics?.getTodayBehaviourStats) {
+      const stats = await BehaviourMetrics.getTodayBehaviourStats();
+      const minutes = stats?.totalScreenTimeMinutesToday ?? 0;
+      return Number(minutes) * 60 * 1000;
+    }
+
+    if (UsageStatsBridge?.getScreenTimeLast24hMs) {
+      const milliseconds = await UsageStatsBridge.getScreenTimeLast24hMs();
+      return Number(milliseconds) || 0;
+    }
+
+    if (UsageStatsBridge?.getTotalScreenTimeMsToday) {
+      const milliseconds = await UsageStatsBridge.getTotalScreenTimeMsToday();
+      return Number(milliseconds) || 0;
+    }
+
+    if (UsageStatsBridge?.getTotalScreenTimeMinutesToday) {
+      const minutes = await UsageStatsBridge.getTotalScreenTimeMinutesToday();
+      return Number(minutes) * 60 * 1000;
+    }
+  } catch (e) {
+    console.warn("Screen time collection error:", e);
+  }
+
+  return 0;
+}
+
 // ─── Master collector ─────────────────────────────────────────────────────────
 
 /**

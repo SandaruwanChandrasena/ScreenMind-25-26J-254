@@ -38,8 +38,9 @@
     <!-- Do Not Disturb access (Sleep) -->
     <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
 
-    <!-- Optional -->
+    <!-- wifi -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
 
     <!-- ===================== -->
     <!-- Package visibility (Android 11+) -->

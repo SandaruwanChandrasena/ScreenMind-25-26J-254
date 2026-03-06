@@ -14,6 +14,8 @@ import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
 import com.screenmindapp.sleep.SleepEventPackage
+import com.screenmindapp.isolation.WifiMetricsPackage
+
 
 class MainApplication : Application(), ReactApplication {
 
@@ -30,6 +32,7 @@ class MainApplication : Application(), ReactApplication {
           add(BehaviourMetricsPackage())
           add(CommunicationStatsPackage())
           add(SleepEventPackage())
+          add(WifiMetricsPackage())
 
           // Packages that cannot be autolinked yet can be added manually here
         },
