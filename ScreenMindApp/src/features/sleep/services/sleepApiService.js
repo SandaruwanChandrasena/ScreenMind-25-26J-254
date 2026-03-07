@@ -1,6 +1,7 @@
 // src/features/sleep/services/sleepApiService.js
 
-const BASE_URL = 'http://127.0.0.1:8000/api/v1/c3_sleep';
+import { PYTHON_BACKEND_URL } from '@env';
+const BASE_URL = `${PYTHON_BACKEND_URL}/api/v1/c3_sleep`;
 
 /**
  * Predict sleep disruption risk from behavioral data
