@@ -4,6 +4,25 @@ import { PYTHON_BACKEND_URL } from '@env';
 import { NativeModules } from 'react-native';
 
 // ─────────────────────────────────────────────
+// ✅ Get current user ID from AsyncStorage
+// Saved by AuthContext when user logs in
+// Works reliably in background headless tasks
+// ─────────────────────────────────────────────
+async function getUserId() {
+  try {
+    const uid = await AsyncStorage.getItem('current_user_id');
+    if (uid) {
+      console.log(`👤 User ID from AsyncStorage: ${uid}`);
+      return uid;
+    }
+    console.log('⚠️ No user ID in AsyncStorage — using test_user_123');
+    return 'test_user_123';
+  } catch (e) {
+    return 'test_user_123';
+  }
+}
+
+// ─────────────────────────────────────────────
 // ✅ WHITELIST
 // ─────────────────────────────────────────────
 const SOCIAL_APP_WHITELIST = [
@@ -86,12 +105,12 @@ function sanitizeText(raw = '') {
 // ─────────────────────────────────────────────
 // ✅ SEND ONE MESSAGE TO BACKEND
 // ─────────────────────────────────────────────
-async function analyzeOneMessage(cleanedText, appSource) {
+async function analyzeOneMessage(cleanedText, appSource, userId) {
   try {
     const response = await axios.post(
       `${PYTHON_BACKEND_URL}/api/v1/social-media/analyze`,
       {
-        user_id: 'test_user_123',
+        user_id: userId,
         app_source: appSource,
         cleaned_text: cleanedText,
         timestamp: new Date().toISOString(),
@@ -234,6 +253,9 @@ export default async function headlessTask({ notification }) {
       return;
     }
 
+    // 2️⃣c Get real user ID from AsyncStorage (saved by AuthContext on login)
+    const userId = await getUserId();
+
     // 3️⃣ Sanitize
     const cleanedText = sanitizeText(text);
     if (!cleanedText) return;
@@ -247,8 +269,8 @@ export default async function headlessTask({ notification }) {
     const appName = APP_NAMES[pkg] || pkg;
     console.log(`✅ Accepted: [${appName}] → "${cleanedText}"`);
 
-    // 5️⃣ Send to backend
-    const result = await analyzeOneMessage(cleanedText, pkg);
+    // 5️⃣ Send to backend with real user ID
+    const result = await analyzeOneMessage(cleanedText, pkg, userId);
     if (!result) return;
 
     // 6️⃣ Extract score
@@ -334,20 +356,60 @@ export default async function headlessTask({ notification }) {
     }
 
     // 1️⃣8️⃣ Save latest analysis result
+    const analysisData = {
+      activeBuffer,
+      avg_score: avgScore,
+      risk_level: riskLevel,
+      timestamp: new Date().toISOString(),
+      component: 'social_media',
+    };
     await AsyncStorage.setItem(
       'latest_sm_analysis',
-      JSON.stringify({
-        activeBuffer,
-        avg_score: avgScore,
-        risk_level: riskLevel,
-        timestamp: new Date().toISOString(),
-        component: 'social_media',
-      }),
+      JSON.stringify(analysisData),
     );
+
+    // 1️⃣9️⃣ Save daily snapshot — key = "sm_daily_2026-03-06"
+    // Accumulates negative/positive counts for the whole day
+    const todayKey = `sm_daily_${new Date().toISOString().slice(0, 10)}`;
+    const existingRaw = await AsyncStorage.getItem(todayKey);
+    const existing = existingRaw
+      ? JSON.parse(existingRaw)
+      : {
+          date: new Date().toISOString().slice(0, 10),
+          negativeCount: 0,
+          positiveCount: 0,
+          neutralCount: 0,
+          totalCount: 0,
+          highRiskCount: 0,
+          peakAvgScore: 0,
+          lastRiskLevel: 'LOW',
+          lastTimestamp: null,
+        };
+
+    const negCount = activeBuffer.filter(m => m.label === 'Negative').length;
+    const posCount = activeBuffer.filter(m => m.label === 'Positive').length;
+    const neuCount = activeBuffer.filter(m => m.label === 'Neutral').length;
+
+    const snapshot = {
+      ...existing,
+      negativeCount: Math.max(existing.negativeCount, negCount),
+      positiveCount: Math.max(existing.positiveCount, posCount),
+      neutralCount: Math.max(existing.neutralCount, neuCount),
+      totalCount: Math.max(existing.totalCount, activeBuffer.length),
+      highRiskCount:
+        riskLevel === 'HIGH'
+          ? existing.highRiskCount + 1
+          : existing.highRiskCount,
+      peakAvgScore: Math.max(existing.peakAvgScore, avgScore),
+      lastRiskLevel: riskLevel,
+      lastTimestamp: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem(todayKey, JSON.stringify(snapshot));
 
     console.log(
       `💾 Saved: risk_score=${avgScore.toFixed(2)}, level=${riskLevel}`,
     );
+    console.log(`📅 Daily snapshot updated: ${todayKey}`);
   } catch (error) {
     console.log('❌ Headless Task Error:', error);
   }

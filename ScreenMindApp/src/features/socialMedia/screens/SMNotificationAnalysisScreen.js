@@ -10,6 +10,10 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import notifee, { TriggerType, RepeatFrequency } from '@notifee/react-native';
+import {
+  fetchDailySummary,
+  getCurrentUserId,
+} from '../services/smFirebase.service';
 import DashboardBackground from '../../../components/DashboardBackground';
 import { colors } from '../../../theme/colors';
 import { spacing } from '../../../theme/spacing';
@@ -65,18 +69,83 @@ export default function SMNotificationAnalysisScreen() {
   const [cooldownSecsLeft, setCooldownSecsLeft] = useState(0); // seconds remaining
   const [cooldownActive, setCooldownActive] = useState(false);
 
-  const overallTone = 'Mixed';
-  const tone = 'high';
+  // ── Summary State (real data from AsyncStorage) ───────────────
+  const [summaryData, setSummaryData] = useState({
+    overallTone: 'No Data',
+    riskLevel: 'none',
+    avgScore: 0,
+    negativeCount: 0,
+    positiveCount: 0,
+    neutralCount: 0,
+    totalCount: 0,
+    lastUpdated: null,
+    dissonanceCount: 0,
+    appCounts: {},
+  });
+
+  // ── Live session state (current active window from AsyncStorage) ─
+  const [sessionData, setSessionData] = useState({
+    negativeCount: 0,
+    positiveCount: 0,
+    neutralCount: 0,
+    totalCount: 0,
+    avgScore: 0,
+    riskLevel: 'LOW',
+    hasData: false,
+  });
+
+  // ── Day selector ───────────────────────────────────────────────
+  const [selectedDay, setSelectedDay] = useState(0); // 0 = today
+  const [dayDropdownOpen, setDayDropdownOpen] = useState(false);
+  const [availableDays, setAvailableDays] = useState([]);
+
+  // Build last 7 days list
+  const buildDayOptions = () => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        '0',
+      )}-${String(d.getDate()).padStart(2, '0')}`;
+      const label =
+        i === 0
+          ? 'Today'
+          : i === 1
+          ? 'Yesterday'
+          : d.toLocaleDateString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+            });
+      return { index: i, dateStr, label };
+    });
+  };
+
+  const overallTone = summaryData.overallTone;
+  const tone =
+    summaryData.riskLevel === 'HIGH'
+      ? 'high'
+      : summaryData.riskLevel === 'MODERATE'
+      ? 'moderate'
+      : summaryData.riskLevel === 'LOW'
+      ? 'low'
+      : 'none';
   const toneConfig = {
+    none: {
+      bg: 'rgba(156,163,175,0.12)',
+      text: '#6B7280',
+      label: 'No data yet. Start monitoring to see your summary.',
+    },
     low: {
       bg: 'rgba(34,197,94,0.18)',
       text: '#22C55E',
-      label: 'Low risk detected today.',
+      label: "You're in a positive space today. Keep it up! 💚",
     },
     moderate: {
       bg: 'rgba(255,184,0,0.18)',
       text: '#FFB800',
-      label: 'Mixed emotional signals detected.',
+      label: 'Mixed emotional signals detected today.',
     },
     high: {
       bg: 'rgba(239,68,68,0.18)',
@@ -84,7 +153,7 @@ export default function SMNotificationAnalysisScreen() {
       label: 'Higher negative signals detected today.',
     },
   };
-  const toneUI = toneConfig[tone];
+  const toneUI = toneConfig[tone] || toneConfig.none;
   const statusUI = useMemo(
     () =>
       notifAccessEnabled
@@ -93,7 +162,171 @@ export default function SMNotificationAnalysisScreen() {
     [notifAccessEnabled],
   );
 
-  // ── Check notification permission ──────────────────────────────
+  // ── Load real summary data ─────────────────────────────────────
+  useEffect(() => {
+    const days = buildDayOptions();
+    setAvailableDays(days);
+  }, []);
+
+  useEffect(() => {
+    const loadSummary = async () => {
+      try {
+        const days = buildDayOptions();
+        const target = days[selectedDay];
+
+        let negativeCount = 0,
+          positiveCount = 0,
+          neutralCount = 0;
+        let totalCount = 0,
+          avgScore = 0,
+          riskLevel = 'LOW';
+        let lastUpdated = null,
+          dissonanceCount = 0,
+          appCounts = {};
+
+        if (selectedDay === 0) {
+          // ── LIVE SESSION: always load from AsyncStorage ───────────
+          const raw = await AsyncStorage.getItem('latest_sm_analysis');
+          if (raw) {
+            const data = JSON.parse(raw);
+            const buffer = data.activeBuffer || data.buffer || [];
+            const sNeg = buffer.filter(m => m.label === 'Negative').length;
+            const sPos = buffer.filter(m => m.label === 'Positive').length;
+            const sNeu = buffer.filter(m => m.label === 'Neutral').length;
+            setSessionData({
+              negativeCount: sNeg,
+              positiveCount: sPos,
+              neutralCount: sNeu,
+              totalCount: buffer.length,
+              avgScore: data.avg_score || 0,
+              riskLevel: data.risk_level || 'LOW',
+              hasData: true,
+            });
+          } else {
+            setSessionData({
+              negativeCount: 0,
+              positiveCount: 0,
+              neutralCount: 0,
+              totalCount: 0,
+              avgScore: 0,
+              riskLevel: 'LOW',
+              hasData: false,
+            });
+          }
+
+          // ── TODAY FULL DAY: always load from Firebase ─────────────
+          const n = new Date();
+          const todayStr = `${n.getFullYear()}-${String(
+            n.getMonth() + 1,
+          ).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+          const fbData = await fetchDailySummary(todayStr);
+          if (fbData) {
+            negativeCount = fbData.negativeCount;
+            positiveCount = fbData.positiveCount;
+            neutralCount = fbData.neutralCount;
+            totalCount = fbData.totalCount;
+            avgScore = fbData.avgScore;
+            riskLevel = fbData.riskLevel;
+            lastUpdated = fbData.lastTimestamp;
+            dissonanceCount = fbData.dissonanceCount;
+            appCounts = fbData.appCounts;
+          }
+        } else {
+          // ── PAST DAYS: fetch from Firebase Firestore ──────────────
+          console.log(`📅 Loading Firebase data for ${target.dateStr}`);
+          const fbData = await fetchDailySummary(target.dateStr);
+          if (fbData) {
+            negativeCount = fbData.negativeCount;
+            positiveCount = fbData.positiveCount;
+            neutralCount = fbData.neutralCount;
+            totalCount = fbData.totalCount;
+            avgScore = fbData.avgScore;
+            riskLevel = fbData.riskLevel;
+            lastUpdated = fbData.lastTimestamp;
+            dissonanceCount = fbData.dissonanceCount;
+            appCounts = fbData.appCounts;
+          }
+        }
+
+        // Overall tone label
+        const overallTone =
+          totalCount === 0
+            ? 'No Data'
+            : riskLevel === 'HIGH'
+            ? 'High Risk'
+            : riskLevel === 'MODERATE'
+            ? 'Moderate'
+            : negativeCount > positiveCount
+            ? 'Mostly Negative'
+            : positiveCount > negativeCount
+            ? 'Mostly Positive'
+            : 'Mixed';
+
+        setSummaryData({
+          overallTone,
+          riskLevel,
+          avgScore,
+          negativeCount,
+          positiveCount,
+          neutralCount,
+          totalCount,
+          lastUpdated,
+          dissonanceCount,
+          appCounts,
+        });
+      } catch (e) {
+        console.log('❌ Load summary error:', e);
+      }
+    };
+
+    loadSummary();
+    // Auto-refresh only for today
+    let interval;
+    if (selectedDay === 0) {
+      interval = setInterval(loadSummary, 10000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [selectedDay]);
+
+  // ── Recommendations based on risk level ────────────────────────
+  const RECOMMENDATIONS = {
+    LOW: [
+      {
+        icon: '💚',
+        text: "You're doing great! Keep surrounding yourself with positivity.",
+      },
+      { icon: '😊', text: 'Your emotional environment looks healthy today.' },
+    ],
+    MODERATE: [
+      { icon: '🧘', text: 'Take a short break. Try 5 deep breaths.' },
+      { icon: '🚶', text: 'A short walk can help reset your mood.' },
+      { icon: '📓', text: 'Write down how you feel in your journal.' },
+      { icon: '💧', text: 'Drink some water and step away from the screen.' },
+    ],
+    HIGH: [
+      { icon: '🎵', text: 'Listen to calm music to soothe your mind.' },
+      { icon: '📵', text: 'Put your phone down for 15 minutes.' },
+      { icon: '🧘', text: 'Try a 5-minute breathing or meditation exercise.' },
+      { icon: '🚶', text: 'Take a short walk outside and get fresh air.' },
+      { icon: '📓', text: 'Express your feelings by writing in your journal.' },
+      { icon: '🤝', text: 'Talk to someone you trust about how you feel.' },
+    ],
+  };
+
+  const recommendations = RECOMMENDATIONS[summaryData.riskLevel] || [];
+
+  // ── Format last updated time ───────────────────────────────────
+  const formatLastUpdated = timestamp => {
+    if (!timestamp) return 'Not yet updated';
+    const diff = Math.floor(
+      (Date.now() - new Date(timestamp).getTime()) / 1000,
+    );
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return `${Math.floor(diff / 3600)}h ago`;
+  };
   useEffect(() => {
     const checkPermission = async () => {
       const isGranted = await isNotificationAccessEnabled();
@@ -402,6 +635,7 @@ export default function SMNotificationAnalysisScreen() {
 
         <SMSectionTitle title="Today Summary" subtitle="" />
         <View style={styles.summaryCard}>
+          {/* ── Header row ── */}
           <View style={styles.summaryTop}>
             <View style={{ flex: 1 }}>
               <Text style={styles.summaryTitle}>Overall Tone</Text>
@@ -415,40 +649,189 @@ export default function SMNotificationAnalysisScreen() {
                 </Text>
               </View>
             </View>
-            <View style={styles.pill}>
-              <Text style={styles.pillText}>Today</Text>
+
+            {/* ── Day Selector Dropdown ── */}
+            <View style={styles.dayPickerWrapper}>
+              <TouchableOpacity
+                style={styles.dayPickerBtn}
+                onPress={() => setDayDropdownOpen(o => !o)}
+              >
+                <Text style={styles.dayPickerBtnText}>
+                  {availableDays[selectedDay]?.label || 'Today'}
+                </Text>
+                <Text style={styles.dayPickerArrow}>
+                  {dayDropdownOpen ? '▲' : '▼'}
+                </Text>
+              </TouchableOpacity>
+
+              {dayDropdownOpen && (
+                <View style={styles.dayDropdown}>
+                  {availableDays.map(day => (
+                    <TouchableOpacity
+                      key={day.index}
+                      style={[
+                        styles.dayDropdownItem,
+                        selectedDay === day.index &&
+                          styles.dayDropdownItemActive,
+                      ]}
+                      onPress={() => {
+                        setSelectedDay(day.index);
+                        setDayDropdownOpen(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.dayDropdownText,
+                          selectedDay === day.index &&
+                            styles.dayDropdownTextActive,
+                        ]}
+                      >
+                        {day.label}
+                      </Text>
+                      <Text style={styles.dayDropdownDate}>{day.dateStr}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
+
+          {summaryData.lastUpdated && (
+            <Text style={styles.lastUpdated}>
+              🕒 {selectedDay === 0 ? 'Updated' : 'Last activity'}{' '}
+              {formatLastUpdated(summaryData.lastUpdated)}
+            </Text>
+          )}
+
           <View style={{ height: spacing.md }} />
+
+          {/* ── Full Day Stats (from Firebase) ── */}
+          <Text style={styles.sectionLabel}>📊 Full Day Total</Text>
           <View style={styles.row}>
             <SMMiniCard
               label="Negative"
-              value="6"
-              sub="Msgs detected"
+              value={summaryData.negativeCount.toString()}
+              sub="All day"
               tint="rgba(233, 12, 12, 0.24)"
             />
             <SMMiniCard
               label="Positive"
-              value="3"
-              sub="Msgs detected"
+              value={summaryData.positiveCount.toString()}
+              sub="All day"
               tint="rgba(10, 235, 92, 0.24)"
             />
           </View>
-          <View style={{ height: spacing.md }} />
+
+          <View style={{ height: spacing.sm }} />
+
           <View style={styles.row}>
             <SMMiniCard
-              label="Absolutist"
-              value="2"
-              sub="Markers seen"
+              label="Risk Score"
+              value={
+                summaryData.totalCount > 0
+                  ? `${Math.round(summaryData.avgScore * 100)}%`
+                  : '--'
+              }
+              sub="Day average"
               tint="rgba(109, 30, 247, 0.26)"
             />
             <SMMiniCard
-              label="Masking"
-              value="No"
-              sub="Emoji conflict"
+              label={selectedDay === 0 ? 'Total Msgs' : 'Dissonance'}
+              value={
+                selectedDay === 0
+                  ? summaryData.totalCount.toString()
+                  : summaryData.dissonanceCount.toString()
+              }
+              sub={selectedDay === 0 ? 'Analyzed today' : 'Emoji conflicts'}
               tint="rgba(6, 173, 250, 0.33)"
             />
           </View>
+
+          {/* ── Live Session (only show for Today) ── */}
+          {selectedDay === 0 && (
+            <>
+              <View style={styles.sessionDivider} />
+              <Text style={styles.sectionLabel}>⚡ Current Session</Text>
+              {sessionData.hasData ? (
+                <>
+                  <View style={styles.row}>
+                    <SMMiniCard
+                      label="Negative"
+                      value={sessionData.negativeCount.toString()}
+                      sub="This window"
+                      tint="rgba(233, 12, 12, 0.18)"
+                    />
+                    <SMMiniCard
+                      label="Positive"
+                      value={sessionData.positiveCount.toString()}
+                      sub="This window"
+                      tint="rgba(10, 235, 92, 0.18)"
+                    />
+                  </View>
+                  <View style={{ height: spacing.sm }} />
+                  <View style={styles.row}>
+                    <SMMiniCard
+                      label="Risk Score"
+                      value={`${Math.round(sessionData.avgScore * 100)}%`}
+                      sub="Current window"
+                      tint="rgba(109, 30, 247, 0.20)"
+                    />
+                    <SMMiniCard
+                      label="Risk Level"
+                      value={sessionData.riskLevel}
+                      sub="Active window"
+                      tint={
+                        sessionData.riskLevel === 'HIGH'
+                          ? 'rgba(233,12,12,0.18)'
+                          : sessionData.riskLevel === 'MODERATE'
+                          ? 'rgba(251,191,36,0.18)'
+                          : 'rgba(10,235,92,0.18)'
+                      }
+                    />
+                  </View>
+                </>
+              ) : (
+                <View style={styles.sessionEmptyBox}>
+                  <Text style={styles.sessionEmptyText}>
+                    💤 No active session yet.{'\n'}Send messages to start
+                    monitoring.
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* ── Recommendations ── */}
+          {recommendations.length > 0 && (
+            <>
+              <View style={styles.divider} />
+              <Text style={styles.recTitle}>
+                {summaryData.riskLevel === 'HIGH'
+                  ? '🚨 Recommendations for You'
+                  : summaryData.riskLevel === 'MODERATE'
+                  ? '💛 Suggestions to Feel Better'
+                  : '💚 Keep It Up'}
+              </Text>
+              <View style={styles.recList}>
+                {recommendations.map((rec, index) => (
+                  <View key={index} style={styles.recRow}>
+                    <Text style={styles.recIcon}>{rec.icon}</Text>
+                    <Text style={styles.recText}>{rec.text}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* ── No data state ── */}
+          {summaryData.totalCount === 0 && (
+            <View style={styles.noDataBox}>
+              <Text style={styles.noDataText}>
+                📭 No messages analyzed yet.{'\n'}Enable monitoring and start
+                receiving messages.
+              </Text>
+            </View>
+          )}
         </View>
 
         <SMPrivacyStatusCard />
@@ -1224,4 +1607,123 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   journalScheduledText: { color: colors.muted, fontSize: 12, lineHeight: 18 },
+
+  // ── Summary / Recommendation styles ──
+  lastUpdated: {
+    color: colors.faint,
+    fontSize: 10,
+    marginTop: 6,
+    textAlign: 'right',
+  },
+  recTitle: {
+    color: colors.text,
+    fontWeight: '900',
+    fontSize: 13,
+    marginBottom: spacing.sm,
+  },
+  recList: { gap: 8 },
+  recRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    gap: 10,
+  },
+  recIcon: { fontSize: 18, lineHeight: 22 },
+  recText: {
+    flex: 1,
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  noDataBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+  },
+  noDataText: {
+    color: colors.faint,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // ── Section label ──
+  sectionLabel: {
+    color: '#00E0FF',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginTop: 4,
+  },
+
+  // ── Session divider ──
+  sessionDivider: {
+    height: 1,
+    backgroundColor: 'rgba(0,224,255,0.15)',
+    marginVertical: 14,
+  },
+
+  // ── Session empty state ──
+  sessionEmptyBox: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  sessionEmptyText: {
+    color: colors.faint,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // ── Day Selector styles ──
+  dayPickerWrapper: { alignItems: 'flex-end', zIndex: 999 },
+  dayPickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,224,255,0.10)',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  dayPickerBtnText: { color: colors.text, fontWeight: '900', fontSize: 12 },
+  dayPickerArrow: { color: '#00E0FF', fontSize: 9, fontWeight: '900' },
+  dayDropdown: {
+    position: 'absolute',
+    top: 38,
+    right: 0,
+    width: 180,
+    backgroundColor: '#0D1545',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0,224,255,0.25)',
+    overflow: 'hidden',
+    zIndex: 1000,
+    elevation: 10,
+  },
+  dayDropdownItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  dayDropdownItemActive: { backgroundColor: 'rgba(0,224,255,0.10)' },
+  dayDropdownText: { color: colors.text, fontWeight: '800', fontSize: 13 },
+  dayDropdownTextActive: { color: '#00E0FF' },
+  dayDropdownDate: { color: colors.faint, fontSize: 10, marginTop: 2 },
 });
