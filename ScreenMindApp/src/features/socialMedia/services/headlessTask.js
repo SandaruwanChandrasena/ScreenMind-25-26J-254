@@ -275,8 +275,34 @@ export default async function headlessTask({ notification }) {
 
     // 6️⃣ Extract score
     const label = result.sentiment?.label || 'Neutral';
-    const score = parseFloat(result.sentiment?.negative) / 100 || 0.0;
+    let score = parseFloat(result.sentiment?.negative) / 100 || 0.0;
     console.log(`🔍 label=${label}, score=${score.toFixed(2)}`);
+
+    // 6b️⃣ Dissonance Override ─────────────────────────────────────────
+    // If emoji dissonance detected → escalate score to HIGH threshold
+    // Ensures sarcastic/masking messages are not ignored by risk system
+    // even when RoBERTa scores them as Positive.
+    // Research: Felbo et al. (2017), Maity et al. (2022)
+    const dissonance = result.dissonance;
+    const dissonanceTypes = dissonance?.dissonance_types || [];
+    const dissonanceDetected = dissonance?.dissonance_detected === true;
+    const dissonanceRisk = dissonance?.risk_level || 'low';
+
+    if (
+      dissonanceDetected &&
+      (dissonanceRisk === 'high' || dissonanceRisk === 'critical')
+    ) {
+      const oldScore = score;
+      score = Math.max(score, 0.75); // above HIGH_THRESHOLD (0.70)
+      console.log(`⚠️ Dissonance override! ${dissonanceTypes.join(', ')}`);
+      console.log(
+        `   Score: ${oldScore.toFixed(2)} → ${score.toFixed(2)} (escalated)`,
+      );
+      if (dissonanceRisk === 'critical') {
+        score = 1.0; // TYPE 5 crisis → always max score
+        console.log(`🚨 CRISIS signal → score forced to 1.0`);
+      }
+    }
 
     // 7️⃣ Use already-loaded settings for time window calculation
     const windowMs = timeWindowMins * 60 * 1000; // convert to milliseconds
@@ -286,7 +312,22 @@ export default async function headlessTask({ notification }) {
     const raw = await AsyncStorage.getItem(BUFFER_KEY);
     let buffer = raw ? JSON.parse(raw) : [];
 
-    // 9️⃣ Add new message to buffer
+    // 9️⃣ Add new message to buffer — with deduplication
+    const now = Date.now();
+    const isDuplicate = buffer.some(item => {
+      const itemTime = new Date(item.time).getTime();
+      return (
+        item.text === cleanedText &&
+        item.app === pkg &&
+        Math.abs(now - itemTime) < 5000 // same text + same app within 5 seconds
+      );
+    });
+
+    if (isDuplicate) {
+      console.log(`🔁 Duplicate skipped: "${cleanedText}"`);
+      return;
+    }
+
     buffer.push({
       app: pkg,
       text: cleanedText,

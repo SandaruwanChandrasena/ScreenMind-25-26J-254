@@ -104,10 +104,7 @@ export default function SMNotificationAnalysisScreen() {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-        2,
-        '0',
-      )}-${String(d.getDate()).padStart(2, '0')}`;
+      const dateStr = d.toISOString().slice(0, 10);
       const label =
         i === 0
           ? 'Today'
@@ -215,10 +212,7 @@ export default function SMNotificationAnalysisScreen() {
           }
 
           // ── TODAY FULL DAY: always load from Firebase ─────────────
-          const n = new Date();
-          const todayStr = `${n.getFullYear()}-${String(
-            n.getMonth() + 1,
-          ).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+          const todayStr = new Date().toISOString().slice(0, 10);
           const fbData = await fetchDailySummary(todayStr);
           if (fbData) {
             negativeCount = fbData.negativeCount;
@@ -736,14 +730,28 @@ export default function SMNotificationAnalysisScreen() {
               tint="rgba(109, 30, 247, 0.26)"
             />
             <SMMiniCard
-              label={selectedDay === 0 ? 'Total Msgs' : 'Dissonance'}
-              value={
-                selectedDay === 0
-                  ? summaryData.totalCount.toString()
-                  : summaryData.dissonanceCount.toString()
-              }
-              sub={selectedDay === 0 ? 'Analyzed today' : 'Emoji conflicts'}
+              label="Total Msgs"
+              value={summaryData.totalCount.toString()}
+              sub={selectedDay === 0 ? 'Analyzed today' : 'Analyzed this day'}
               tint="rgba(6, 173, 250, 0.33)"
+            />
+          </View>
+
+          <View style={{ height: spacing.sm }} />
+
+          {/* ── Dissonance card — always visible for all days ── */}
+          <View style={styles.row}>
+            <SMMiniCard
+              label="🎭 Dissonance"
+              value={summaryData.dissonanceCount.toString()}
+              sub="Emoji masking detected"
+              tint="rgba(255, 100, 200, 0.25)"
+            />
+            <SMMiniCard
+              label="🧠 Neutral"
+              value={summaryData.neutralCount.toString()}
+              sub="Balanced messages"
+              tint="rgba(156, 163, 175, 0.20)"
             />
           </View>
 
