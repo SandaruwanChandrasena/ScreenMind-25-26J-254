@@ -1,0 +1,56 @@
+{
+  "all_features": [
+    "daily_distance_m",
+    "time_at_home_pct",
+    "location_entropy",
+    "transitions",
+    "radius_of_gyration_km",
+    "calls_per_day",
+    "avg_call_duration_s",
+    "unique_contacts",
+    "sms_per_day",
+    "silence_hours",
+    "night_usage_min",
+    "unlocks_per_day",
+    "total_screen_min",
+    "social_app_min",
+    "social_pct",
+    "rhythm_irregularity",
+    "bluetooth_avg_devices",
+    "wifi_diversity"
+  ],
+  "mobility_features": [
+    "daily_distance_m",
+    "time_at_home_pct",
+    "location_entropy",
+    "transitions",
+    "radius_of_gyration_km"
+  ],
+  "communication_features": [
+    "calls_per_day",
+    "avg_call_duration_s",
+    "unique_contacts",
+    "sms_per_day",
+    "silence_hours"
+  ],
+  "behaviour_features": [
+    "night_usage_min",
+    "unlocks_per_day",
+    "total_screen_min",
+    "social_app_min",
+    "social_pct",
+    "rhythm_irregularity"
+  ],
+  "proximity_features": [
+    "bluetooth_avg_devices",
+    "wifi_diversity"
+  ],
+  "window_size": 7,
+  "n_classes": 3,
+  "class_names": [
+    "Low",
+    "Moderate",
+    "High"
+  ],
+  "model_type": "multimodal_lstm"
+}

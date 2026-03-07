@@ -1,16 +1,3 @@
-/**
- * IsolationOverviewScreen.js
- *
- * Main dashboard for the Social Isolation component.
- *
- * What changed from the original:
- *  • Uses the fixed isolationCollector (collectRealFeatures) which now properly
- *    reads GPS, unlock, behaviour, communication, bluetooth.
- *  • Passes the full scoring result (including reasons, suggestions,
- *    socialItems, withdrawItems) into the saved daily record.
- *  • The saved record is what IsolationWhyScreen and IsolationSuggestionsScreen read.
- */
-
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator,
@@ -18,17 +5,31 @@ import {
 import Icon from "react-native-vector-icons/Ionicons";
 import { RESULTS } from "../services/permissionHelper";
 
-import DashboardBackground from "../../../components/DashboardBackground";
+import ScreenBackground from "../../../components/ScreenBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
 import GaugeRing from "../components/GaugeRing";
 
-import { getIsolationPrefs, upsertDailyIsolationRecord } from "../services/isolationStorage";
-import { computeIsolationRisk } from "../services/isolationScoring";
+import {
+  getIsolationPrefs,
+  upsertDailyIsolationRecord,
+  getDailyIsolationHistory,
+} from "../services/isolationStorage";
 import { collectRealFeatures } from "../services/isolationCollector";
 import { checkAllPermissions } from "../services/permissionHelper";
+
+// ── NEW: import the API caller (falls back to local scorer if backend is down)
+import { fetchIsolationRiskWithFallback } from "../services/isolationApi";
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+// Your device's local IP where the backend runs.
+// Change this to match your computer's IP on the same WiFi network.
+// Windows: run `ipconfig`  |  Mac/Linux: run `ifconfig`
+// Example: 'http://192.168.1.45:8000/api/v1'
+const USER_ID = "user_001"; // replace with real auth user ID when available
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -69,15 +70,39 @@ function computeHasRequiredPermissions(perms, p) {
   return gpsOk;
 }
 
+/**
+ * Build a list of the last 7 days of feature records from storage.
+ * Each element = the `features` field from a daily record.
+ * If fewer than 7 days exist, we pad with copies of the earliest record.
+ */
+function buildFeatureWindow(history, todayFeatures) {
+  // history is newest-first, we need oldest-first for the LSTM window
+  const sorted = [...history]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .filter((r) => r.features)               // only records that have features saved
+    .slice(-6);                               // take last 6 saved days
+
+  // Add today's freshly collected features as the final (7th) day
+  const window = [...sorted.map((r) => r.features), todayFeatures];
+
+  // Pad to at least 7 if we don't have enough history yet
+  while (window.length < 7) {
+    window.unshift(window[0]);               // repeat earliest day at the front
+  }
+
+  return window.slice(-7);                   // always return exactly 7
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function IsolationOverviewScreen({ navigation }) {
   const [loading,        setLoading]        = useState(true);
   const [prefs,          setPrefs]          = useState(null);
   const [features,       setFeatures]       = useState(null);
-  const [risk,           setRisk]           = useState({ score: 0, label: "Low", breakdown: {} });
+  const [risk,           setRisk]           = useState({ score: 0, label: "Low", breakdown: {}, used: [] });
   const [hasPermissions, setHasPermissions] = useState(true);
   const [errorMsg,       setErrorMsg]       = useState("");
+  const [usingBackend,   setUsingBackend]   = useState(false);   // shows which source was used
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -92,33 +117,60 @@ export default function IsolationOverviewScreen({ navigation }) {
       const perms = await checkAllPermissions();
       setHasPermissions(computeHasRequiredPermissions(perms, storedPrefs));
 
-      // 3) Collect real features (this now reads GPS, unlock, behaviour, communication, BT)
-      const f = await collectRealFeatures();
-      setFeatures(f);
+      // 3) Collect today's fresh features from phone sensors
+      const todayFeatures = await collectRealFeatures();
+      setFeatures(todayFeatures);
 
-      // 4) Score
-      const r = computeIsolationRisk(f, storedPrefs);
-      setRisk(r);
+      // 4) Load history and build 7-day window for the ML model
+      const history     = await getDailyIsolationHistory();
+      const featureWindow = buildFeatureWindow(history, todayFeatures);
 
-      // 5) Save today's record — now includes reasons, suggestions, socialItems, withdrawItems
+      // 5) Call the ML backend (falls back to local scorer automatically)
+      const result = await fetchIsolationRiskWithFallback(
+        USER_ID,
+        featureWindow,
+        storedPrefs
+      );
+
+      // 6) Detect whether backend ML or local scorer was used
+      //    The local scorer sets message starting with "(Local"
+      const usedBackend = !result.message?.startsWith("(Local");
+      setUsingBackend(usedBackend);
+
+      // 7) Normalise result into the same shape the rest of the UI expects
+      //    (backend returns slightly different field names from local scorer)
+      const normalisedRisk = {
+        score:        result.score,
+        label:        result.label,
+        breakdown:    normaliseBreakdown(result.breakdown),
+        used:         result.used_pillars ?? result.used ?? [],
+        reasons:      result.reasons      ?? [],
+        suggestions:  result.suggestions  ?? [],
+        socialItems:  result.socialItems  ?? [],
+        withdrawItems:result.withdrawItems?? [],
+      };
+      setRisk(normalisedRisk);
+
+      // 8) Save full record so Why/Suggestions/Stats screens can read it
       await upsertDailyIsolationRecord({
         date:          todayISO(),
-        riskScore:     r.score,
-        riskLabel:     r.label,
-        breakdown:     r.breakdown,
-        used:          r.used,
-        reasons:       r.reasons,        // ← IsolationWhyScreen reads this
-        suggestions:   r.suggestions,    // ← IsolationSuggestionsScreen reads this
-        socialItems:   r.socialItems,    // ← IsolationStatsScreen reads this
-        withdrawItems: r.withdrawItems,  // ← IsolationStatsScreen reads this
-        features:      f,
+        riskScore:     normalisedRisk.score,
+        riskLabel:     normalisedRisk.label,
+        breakdown:     normalisedRisk.breakdown,
+        used:          normalisedRisk.used,
+        reasons:       normalisedRisk.reasons,
+        suggestions:   normalisedRisk.suggestions,
+        socialItems:   normalisedRisk.socialItems,
+        withdrawItems: normalisedRisk.withdrawItems,
+        features:      todayFeatures,
+        source:        usedBackend ? "ml_backend" : "local_scorer",
       });
 
     } catch (e) {
       console.warn("IsolationOverview error:", e);
       setErrorMsg("Couldn't load some metrics. Enable permissions and try again.");
       setFeatures((prev) => prev ?? {});
-      setRisk((prev) => prev ?? { score: 0, label: "Low", breakdown: {} });
+      setRisk((prev) => prev ?? { score: 0, label: "Low", breakdown: {}, used: [] });
     } finally {
       setLoading(false);
     }
@@ -126,14 +178,14 @@ export default function IsolationOverviewScreen({ navigation }) {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // Build highlight cards
+  // Build highlight cards from raw features
   const highlights = useMemo(() => {
     if (!features || !prefs) return [];
     const list = [];
 
     if (prefs.gps) {
       list.push({ label: "Daily distance", value: formatMeters(features.dailyDistanceMeters) });
-      list.push({ label: "Time at home",   value: `${Math.round(features.timeAtHomePct || 0)}%` });
+      list.push({ label: "Time at home",   value: `${Math.round((features.timeAtHomePct || 0) * 100)}%` });
     } else {
       list.push({ label: "Daily distance", value: "Off" });
       list.push({ label: "Time at home",   value: "Off" });
@@ -154,38 +206,48 @@ export default function IsolationOverviewScreen({ navigation }) {
     return list.slice(0, 4);
   }, [features, prefs]);
 
-  // Build summary sentence from risk reasons
+  // Build summary sentence
   const summary = useMemo(() => {
     if (!risk.reasons?.length) {
       return "Your recent patterns look balanced. Keep maintaining healthy social exposure.";
     }
     const top = risk.reasons.filter((r) => r.risk > 0.3).slice(0, 2);
-    if (!top.length) {
-      return "No significant risk factors detected this week. Keep it up!";
-    }
+    if (!top.length) return "No significant risk factors detected this week. Keep it up!";
     return top.map((r) => r.title).join(" + ") + " detected over the last 7 days.";
   }, [risk]);
 
   // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <DashboardBackground>
+      <ScreenBackground>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" />
           <Text style={styles.loadingText}>Loading social well-being…</Text>
         </View>
-      </DashboardBackground>
+      </ScreenBackground>
     );
   }
 
   // ─── Main render ──────────────────────────────────────────────────────────
   return (
-    <DashboardBackground>
+    <ScreenBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>📍 Social Well-being</Text>
         <Text style={styles.sub}>
           Loneliness risk based on mobility + communication + behaviour.
         </Text>
+
+        {/* Backend/local indicator badge */}
+        <View style={[styles.sourceBadge, { backgroundColor: usingBackend ? "rgba(46,204,113,0.15)" : "rgba(243,156,18,0.15)" }]}>
+          <Icon
+            name={usingBackend ? "cloud-done-outline" : "phone-portrait-outline"}
+            size={13}
+            color={usingBackend ? "#2ecc71" : "#f39c12"}
+          />
+          <Text style={[styles.sourceBadgeText, { color: usingBackend ? "#2ecc71" : "#f39c12" }]}>
+            {usingBackend ? "AI model (backend)" : "Local estimate"}
+          </Text>
+        </View>
 
         {/* Error card */}
         {!!errorMsg && (
@@ -287,8 +349,25 @@ export default function IsolationOverviewScreen({ navigation }) {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </DashboardBackground>
+    </ScreenBackground>
   );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * The backend returns breakdown as { mobility, communication, behaviour, proximity }
+ * The local scorer returns            { mobility, comm, beh, prox }
+ * Normalise to a consistent shape for the UI.
+ */
+function normaliseBreakdown(bd) {
+  if (!bd) return {};
+  return {
+    mobility:      bd.mobility      ?? bd.mobility      ?? 0,
+    comm:          bd.communication ?? bd.comm          ?? 0,
+    beh:           bd.behaviour     ?? bd.beh           ?? 0,
+    prox:          bd.proximity     ?? bd.prox          ?? 0,
+  };
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -298,6 +377,15 @@ const styles = StyleSheet.create({
   title:      { color: colors.text, fontSize: 26, fontWeight: "900" },
   sub:        { color: colors.muted, marginTop: 6, lineHeight: 18 },
   body:       { color: colors.faint, lineHeight: 18 },
+
+  sourceBadge: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 999, marginTop: spacing.sm,
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+  },
+  sourceBadgeText: { fontSize: 11, fontWeight: "700" },
 
   bigBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
