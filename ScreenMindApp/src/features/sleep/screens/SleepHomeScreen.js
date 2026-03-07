@@ -41,6 +41,39 @@ import {
 } from "../services/sleepRepository";
 
 
+import { 
+  startLateNightWarningMonitor, 
+  stopLateNightWarningMonitor,
+  scheduleBedtimeReminder 
+} from '../services/sleepWarningService';
+
+const { SleepServiceModule } = NativeModules;
+
+// When starting session:
+async function handleStartSession() {
+  // ... your existing start logic ...
+
+  // Start foreground service (keeps sensors alive through screen lock)
+  SleepServiceModule?.startForegroundService();
+
+  // Start late night monitor
+  startLateNightWarningMonitor(newSessionId);
+}
+
+// When stopping session:
+async function handleStopSession() {
+  // ... your existing stop logic ...
+
+  // Stop foreground service
+  SleepServiceModule?.stopForegroundService();
+
+  // Stop warning monitor
+  stopLateNightWarningMonitor();
+}
+
+
+
+
 import {
   computeRiskScore,
   predictSleepRiskML,
@@ -106,9 +139,10 @@ export default function SleepHomeScreen({ navigation }) {
   // Prevent logging duplicates (some devices re-post same event)
   const lastNotifKeyRef = useRef(null);
 
-  // ====== 1) Permissions check (optional) ======
+  // ====== 1) Permissions check + bedtime reminder (on app load) ======
   useEffect(() => {
     checkPermissions();
+    scheduleBedtimeReminder(); // Schedule bedtime reminder on app load
   }, []);
 
   const checkPermissions = async () => {

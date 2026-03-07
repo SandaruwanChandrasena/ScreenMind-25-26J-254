@@ -9,6 +9,66 @@ async function exec(db, sql, params = []) {
   return res[0];
 }
 
+
+// Add to sleepRepository.js
+
+export async function logChargingEvent({
+  userId = null,
+  sessionId = null,
+  eventType,   // 'CHARGING_START' | 'CHARGING_STOP'
+  ts,
+  batteryLevel = null,
+  isLikelyBedtime = false,
+  isLikelyWakeTime = false,
+}) {
+  const db = await getDB();
+  await db.executeSql(
+    `INSERT INTO charging_events
+     (user_id, session_id, event_type, ts,
+      battery_level, is_likely_bedtime, is_likely_waketime)
+     VALUES (?, ?, ?, ?, ?, ?, ?);`,
+    [
+      userId, sessionId, eventType, ts,
+      batteryLevel,
+      isLikelyBedtime ? 1 : 0,
+      isLikelyWakeTime ? 1 : 0,
+    ]
+  );
+}
+
+export async function getChargingEventsForSession(sessionId) {
+  const db = await getDB();
+  const rs = await db.executeSql(
+    `SELECT * FROM charging_events
+     WHERE session_id = ?
+     ORDER BY ts ASC;`,
+    [sessionId]
+  );
+  const rows = [];
+  for (let i = 0; i < rs[0].rows.length; i++) {
+    rows.push(rs[0].rows.item(i));
+  }
+  return rows;
+}
+
+// Estimate bedtime from charging start events
+export async function estimateBedtimeFromCharging(sessionId) {
+  const events = await getChargingEventsForSession(sessionId);
+  const bedtimeEvent = events.find(
+    e => e.event_type === 'CHARGING_START' && e.is_likely_bedtime
+  );
+  const waketimeEvent = events.find(
+    e => e.event_type === 'CHARGING_STOP' && e.is_likely_waketime
+  );
+  return {
+    estimatedBedtime: bedtimeEvent?.ts ?? null,
+    estimatedWaketime: waketimeEvent?.ts ?? null,
+  };
+}
+
+
+
+
 /**
  * Create a new sleep session
  * Returns sessionId

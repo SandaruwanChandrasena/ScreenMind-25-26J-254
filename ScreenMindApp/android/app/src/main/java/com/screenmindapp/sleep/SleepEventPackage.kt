@@ -12,7 +12,8 @@ class SleepEventPackage : ReactPackage {
     ): List<NativeModule> = listOf(
         SleepEventModule(reactContext),
         SleepSensorModule(reactContext),
-        SnoringDetectionModule(reactContext)
+        SnoringDetectionModule(reactContext),
+        SleepServiceModule(reactContext)
     )
 
     override fun createViewManagers(

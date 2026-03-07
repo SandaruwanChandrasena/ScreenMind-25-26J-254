@@ -80,35 +80,52 @@ import {
   isWithinNightWindow,
 } from "./sleepSettingsService";
 
-const SLEEP_TRACKED_PACKAGES = [
+const SLEEP_TRACKED_PACKAGE_PREFIXES = [
   "com.whatsapp",
-  "com.facebook.katana",
   "com.instagram.android",
   "com.zhiliaoapp.musically",
-  "com.twitter.android",
   "com.snapchat.android",
   "org.telegram.messenger",
   "com.google.android.youtube",
+  "com.facebook.katana", // Facebook
+  "com.facebook.lite",   // Facebook Lite
+  "com.facebook.orca",   // Messenger
+  "com.facebook.mlite",  // Messenger Lite
+  "com.twitter.android", // X (Twitter)
 ];
 
+function normalizePackageName(rawPackageName) {
+  return String(rawPackageName || "").trim().toLowerCase();
+}
+
 function isSocialMedia(packageName) {
-  return SLEEP_TRACKED_PACKAGES.includes(packageName);
+  const normalized = normalizePackageName(packageName);
+  return SLEEP_TRACKED_PACKAGE_PREFIXES.some(prefix =>
+    normalized === prefix || normalized.startsWith(`${prefix}:`)
+  );
 }
 
 export async function handleSleepNotification(parsed) {
   try {
-    const packageName = parsed?.app ?? null;
+    const packageName = normalizePackageName(parsed?.app);
     const title = parsed?.title ?? null;
     const ts = parsed?.time
       ? parseInt(parsed.time)
       : Date.now();
+
+    // ── Only track social media and messaging apps ──
+    const socialMedia = isSocialMedia(packageName);
+    
+    if (!socialMedia) {
+      console.log(`🚫 Ignored notification from: ${packageName} (not in tracked apps)`);
+      return; // Don't save non-tracked apps
+    }
 
     // ── Load user's personal sleep schedule ──
     const settings = await loadSleepSchedule();
 
     // ── Check against USER'S night window ──
     const night = isWithinNightWindow(ts, settings);
-    const socialMedia = isSocialMedia(packageName);
 
     const activeSession = await getActiveSleepSession(null);
     const sessionId = activeSession?.id ?? null;
