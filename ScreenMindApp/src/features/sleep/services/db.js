@@ -82,9 +82,17 @@ async function ensureTables(db) {
       z REAL,
       value REAL,
       ts INTEGER NOT NULL,
+      meta TEXT,
       FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
     );
   `);
+
+  // Migration: Add meta column if it doesn't exist
+  try {
+    await db.executeSql(`ALTER TABLE sensor_samples ADD COLUMN meta TEXT;`);
+  } catch (e) {
+    // Column already exists, ignore error
+  }
 
   await db.executeSql(`
     CREATE TABLE IF NOT EXISTS morning_checkins (
@@ -140,7 +148,21 @@ async function ensureTables(db) {
       overall_intensity TEXT DEFAULT 'Mild',
       FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
     );
-  `);   
+  `);
+
+  await db.executeSql(`
+    CREATE TABLE IF NOT EXISTS charging_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT,
+      session_id INTEGER,
+      event_type TEXT NOT NULL,
+      ts INTEGER NOT NULL,
+      battery_level INTEGER,
+      is_likely_bedtime INTEGER DEFAULT 0,
+      is_likely_waketime INTEGER DEFAULT 0,
+      FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
+    );
+  `);
 }
 
 export async function getDB() {

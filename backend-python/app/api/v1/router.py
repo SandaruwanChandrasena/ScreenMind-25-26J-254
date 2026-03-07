@@ -29,6 +29,13 @@ api_router.include_router(
     tags=["C3 - Sleep"]
 )
 
+# Backward-compatible alias for existing clients
+api_router.include_router(
+    sleep_routes.router,
+    prefix="/c3_sleep",
+    tags=["C3 - Sleep"]
+)
+
 # ─── C4: Social Media Analysis ────────────────────────────────────────────────
 api_router.include_router(
     social_media_routes.router,

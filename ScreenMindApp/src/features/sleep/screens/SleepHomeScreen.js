@@ -19,14 +19,14 @@ import { spacing } from "../../../theme/spacing";
 import { settingsAccess } from "../services/settingsAccess";
 
 ///
-import { 
-  startSensorTracking, 
-  stopSensorTracking 
+import {
+  startSensorTracking,
+  stopSensorTracking
 } from "../services/sensorService";
 
-import { 
-  startSleepEventTracking, 
-  stopSleepEventTracking 
+import {
+  startSleepEventTracking,
+  stopSleepEventTracking
 } from "../services/sleepEventService";
 ///
 import {
@@ -37,7 +37,49 @@ import {
   logScreenEvent,
   logNotificationEvent,
   debugDumpSleepTables, // optional
+  cleanupStaleSessions,
 } from "../services/sleepRepository";
+
+
+import { 
+  startLateNightWarningMonitor, 
+  stopLateNightWarningMonitor,
+  scheduleBedtimeReminder 
+} from '../services/sleepWarningService';
+
+const { SleepServiceModule } = NativeModules;
+
+// When starting session:
+async function handleStartSession() {
+  // ... your existing start logic ...
+
+  // Start foreground service (keeps sensors alive through screen lock)
+  SleepServiceModule?.startForegroundService();
+
+  // Start late night monitor
+  startLateNightWarningMonitor(newSessionId);
+}
+
+// When stopping session:
+async function handleStopSession() {
+  // ... your existing stop logic ...
+
+  // Stop foreground service
+  SleepServiceModule?.stopForegroundService();
+
+  // Stop warning monitor
+  stopLateNightWarningMonitor();
+}
+
+
+
+
+import {
+  computeRiskScore,
+  predictSleepRiskML,
+  buildFeaturesFromSessions
+} from "../services/sleepApiService";
+import { getLast7Sessions } from "../services/sleepRepository";
 
 import { computeDisruptionScore } from "../services/sleepScoring";
 
@@ -66,8 +108,8 @@ function RiskBadge({ risk }) {
     risk === "High"
       ? "rgba(239,68,68,0.18)"
       : risk === "Medium"
-      ? "rgba(245,158,11,0.16)"
-      : "rgba(34,197,94,0.14)";
+        ? "rgba(245,158,11,0.16)"
+        : "rgba(34,197,94,0.14)";
 
   return (
     <View style={[styles.riskBadge, { backgroundColor: bg }]}>
@@ -97,32 +139,65 @@ export default function SleepHomeScreen({ navigation }) {
   // Prevent logging duplicates (some devices re-post same event)
   const lastNotifKeyRef = useRef(null);
 
-  // ====== 1) Permissions check (optional) ======
+  // ====== 1) Permissions check + bedtime reminder (on app load) ======
   useEffect(() => {
     checkPermissions();
+    scheduleBedtimeReminder(); // Schedule bedtime reminder on app load
   }, []);
 
   const checkPermissions = async () => {
     try {
-      const usage = await settingsAccess.hasUsageStatsAccess();
-      const notif = await settingsAccess.hasNotificationListenerAccess();
-      const dnd = await settingsAccess.hasDndAccess();
+      const usage = await settingsAccess.hasUsageStatsAccess?.();
+      const notif = await settingsAccess.hasNotificationListenerAccess?.();
+      const dnd = await settingsAccess.hasDndAccess?.();
 
-      console.log("Usage access:", usage);
-      console.log("Notification access:", notif);
-      console.log("DND access:", dnd);
+      console.log("✅ Permissions checked:");
+      console.log("  Usage access:", usage ?? false);
+      console.log("  Notification access:", notif ?? false);
+      console.log("  DND access:", dnd ?? false);
     } catch (e) {
-      console.log("Permission check error:", e);
+      console.error("Permission check error:", e.message || e);
+      // Non-blocking: permissions check failure doesn't prevent app from running
     }
   };
 
   // ====== 2) Load dashboard summary ======
+  // const loadDashboard = useCallback(async () => {
+  //   setLoading(true);
+  //   try {
+  //     const latest = await getLatestCompletedSession(userId);
+  //     console.log("LATEST COMPLETED SESSION:", latest);
+
+  //     if (!latest) {
+  //       setLatestSummary(null);
+  //       setRiskResult(null);
+  //       return;
+  //     }
+
+  //     const summary = await getSessionSummary(latest.id);
+  //     console.log("LATEST SUMMARY:", summary);
+
+  //     if (!summary) {
+  //       setLatestSummary(null);
+  //       setRiskResult(null);
+  //       return;
+  //     }
+
+  //     const score = computeDisruptionScore(summary);
+  //     setLatestSummary(summary);
+  //     setRiskResult(score);
+  //   } catch (e) {
+  //     console.log("Sleep dashboard load error:", e);
+  //     Alert.alert("Error", "Failed to load sleep data.");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // }, [userId]);
+
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
       const latest = await getLatestCompletedSession(userId);
-      console.log("LATEST COMPLETED SESSION:", latest);
-
       if (!latest) {
         setLatestSummary(null);
         setRiskResult(null);
@@ -130,26 +205,78 @@ export default function SleepHomeScreen({ navigation }) {
       }
 
       const summary = await getSessionSummary(latest.id);
-      console.log("LATEST SUMMARY:", summary);
+      if (!summary) return;
 
-      if (!summary) {
-        setLatestSummary(null);
-        setRiskResult(null);
-        return;
+      setLatestSummary(summary);
+
+      // Try ML risk prediction first
+      let riskResult = null;
+
+      const last7 = await getLast7Sessions(userId);
+
+      if (last7 && last7.length === 7) {
+        // Build features for ML model
+        const features = buildFeaturesFromSessions(last7);
+
+        // Call ML API
+        const mlResult = await predictSleepRiskML(features);
+
+        if (mlResult) {
+          riskResult = {
+            score: mlResult.risk_score,
+            risk: mlResult.risk_category,
+            reasons: [],
+            source: 'ML Model',
+          };
+        }
       }
 
-      const score = computeDisruptionScore(summary);
-      setLatestSummary(summary);
-      setRiskResult(score);
+      // Fallback to rule-based if ML not available
+      if (!riskResult) {
+        const apiResult = await computeRiskScore({
+          screen_time_after_10pm: summary.screenOnCount * 8,
+          social_media_mins_night: summary.socialNotifCount * 5,
+          last_screen_off_hour:
+            new Date(summary.end || Date.now()).getHours(),
+          unlock_count_night: summary.unlockCount,
+          notification_count_night: summary.nightNotifCount,
+          restlessness_score: 0,
+          snoring_duration_mins: summary.snoringTotalMinutes ?? 0,
+          sleep_quality_rating: summary.checkIn?.sleep_quality,
+        });
+
+        if (apiResult) {
+          riskResult = {
+            score: apiResult.risk_score,
+            risk: apiResult.risk_category,
+            reasons: apiResult.reasons,
+            breakdown: apiResult.breakdown,
+            source: 'Rule-Based',
+          };
+        } else {
+          // Last resort: local scoring
+          riskResult = computeDisruptionScore(summary);
+          riskResult.source = 'Local';
+        }
+      }
+
+      setRiskResult(riskResult);
+
     } catch (e) {
-      console.log("Sleep dashboard load error:", e);
-      Alert.alert("Error", "Failed to load sleep data.");
+      console.log("Dashboard load error:", e);
     } finally {
       setLoading(false);
     }
   }, [userId]);
 
   useEffect(() => {
+    // Clean up stale sessions on mount
+    cleanupStaleSessions().then(count => {
+      if (count > 0) {
+        console.log(`✅ Cleaned up ${count} stale session(s)`);
+      }
+    });
+
     loadDashboard();
   }, [loadDashboard]);
 
@@ -175,7 +302,7 @@ export default function SleepHomeScreen({ navigation }) {
   //   const sub = emitter.addListener("SCREENMIND_NOTIFICATION", async (event) => {
   //     try {
   //       console.log("📱 Received notification event:", event);
-        
+
   //       // event expected: { packageName, title, ts }
   //       const packageName = event?.packageName ?? null;
   //       const title = event?.title ?? null;
@@ -255,7 +382,7 @@ export default function SleepHomeScreen({ navigation }) {
   const onStartSession = async () => {
     try {
       if (runningSessionId) {
-        Alert.alert("Already running", 
+        Alert.alert("Already running",
           "Sleep session is already active.");
         return;
       }
@@ -268,7 +395,7 @@ export default function SleepHomeScreen({ navigation }) {
       startSensorTracking(sessionId, userId);
 
       setRunningSessionId(sessionId);
-      Alert.alert("Started ✅", 
+      Alert.alert("Started ✅",
         "Sleep session started. Tracking unlocks, " +
         "notifications and sensors now.");
     } catch (e) {
@@ -281,7 +408,7 @@ export default function SleepHomeScreen({ navigation }) {
     try {
       const sessionId = runningSessionId;
       if (!sessionId) {
-        Alert.alert("No active session", 
+        Alert.alert("No active session",
           "Start a sleep session first.");
         return;
       }
@@ -293,7 +420,7 @@ export default function SleepHomeScreen({ navigation }) {
       await stopSleepSession({ sessionId });
       setRunningSessionId(null);
       await loadDashboard();
-      Alert.alert("Stopped ✅", 
+      Alert.alert("Stopped ✅",
         "Sleep session ended. Dashboard updated.");
     } catch (e) {
       console.log("Stop error:", e);

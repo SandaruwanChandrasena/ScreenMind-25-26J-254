@@ -1,0 +1,17 @@
+{
+  "model_type": "snoring_detection",
+  "input_shape": [
+    40,
+    174,
+    1
+  ],
+  "mfcc_features": 40,
+  "max_pad_len": 174,
+  "sample_rate": 22050,
+  "duration": 2.0,
+  "threshold": 0.75,
+  "labels": {
+    "0": "not_snoring",
+    "1": "snoring"
+  }
+}

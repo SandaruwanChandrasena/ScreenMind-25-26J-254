@@ -14,6 +14,7 @@ import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
 import com.screenmindapp.sleep.SleepEventPackage
+import com.screenmindapp.sleep.SettingsAccessPackage
 
 // ✅ Social Media native modules
 import com.screenmindapp.socialmedia.DeviceControlPackage
@@ -34,6 +35,7 @@ class MainApplication : Application(), ReactApplication {
           add(BehaviourMetricsPackage())
           add(CommunicationStatsPackage())
           add(SleepEventPackage())
+          add(SettingsAccessPackage())
 
           // ✅ Social Media native packages
           add(DeviceControlPackage())
