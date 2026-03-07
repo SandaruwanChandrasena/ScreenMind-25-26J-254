@@ -10,13 +10,16 @@ export default function SocialInteractionScreen() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [permissionDenied, setPermissionDenied] = useState(false);
 
   const loadStats = async () => {
     setLoading(true);
     setError(false);
+    setPermissionDenied(false);
     try {
       const data = await getCommunicationStatsWithPermission();
       setStats(data);
+      setPermissionDenied(!!data?._meta?.permissionDenied);
     } catch (e) {
       console.log("Communication stats error:", e);
       setError(true);
@@ -79,6 +82,12 @@ export default function SocialInteractionScreen() {
         {error && !loading && (
           <Text style={styles.warn}>
             Unable to load communication stats. Please grant Call Log and SMS permissions.
+          </Text>
+        )}
+
+        {permissionDenied && !loading && !error && (
+          <Text style={styles.warn}>
+            Communication permissions are required for real call/SMS summary. Please allow Call Log and SMS, then tap Refresh.
           </Text>
         )}
 
