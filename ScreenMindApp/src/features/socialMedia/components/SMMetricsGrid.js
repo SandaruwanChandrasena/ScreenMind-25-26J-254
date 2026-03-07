@@ -4,19 +4,25 @@ import { spacing } from "../../../theme/spacing";
 import SMMiniCard from "./SMMiniCard";
 
 export default function SMMetricsGrid({ metrics }) {
-  // metrics: array of 4 items (label, value, sub, tint)
   const m = metrics || [];
+
+  // Split into rows of 2
+  const rows = [];
+  for (let i = 0; i < m.length; i += 2) {
+    rows.push([m[i], m[i + 1]].filter(Boolean));
+  }
 
   return (
     <View style={{ gap: spacing.md }}>
-      <View style={styles.row}>
-        <SMMiniCard {...m[0]} />
-        <SMMiniCard {...m[1]} />
-      </View>
-      <View style={styles.row}>
-        <SMMiniCard {...m[2]} />
-        <SMMiniCard {...m[3]} />
-      </View>
+      {rows.map((row, rowIdx) => (
+        <View key={rowIdx} style={styles.row}>
+          {row.map((item, colIdx) => (
+            <SMMiniCard key={colIdx} {...item} />
+          ))}
+          {/* If odd number of items, fill with empty space */}
+          {row.length === 1 && <View style={{ flex: 1 }} />}
+        </View>
+      ))}
     </View>
   );
 }
