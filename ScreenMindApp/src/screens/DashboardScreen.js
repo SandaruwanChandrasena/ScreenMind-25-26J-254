@@ -54,7 +54,7 @@ export default function DashboardScreen({ navigation }) {
             title="Screen Usage"
             subtitle="Usage & addiction risk"
             tint="rgba(124,58,237,0.25)"
-            onPress={() => navigation.navigate('QuestionnaireScreen')}
+            onPress={() => navigation.navigate('ScreenUsageHome')}
           />
 
           <FeatureCard

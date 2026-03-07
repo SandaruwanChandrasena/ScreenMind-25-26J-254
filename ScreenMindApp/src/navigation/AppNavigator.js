@@ -55,6 +55,9 @@ import SnoringScreen from "../features/sleep/screens/SnoringScreen";
 import QuestionnaireScreen from "../features/screenUsage/screens/QuestionnaireScreen";
 import MentalHealthDashboard from "../features/screenUsage/screens/MentalHealthDashboard";
 import PredictionHistoryScreen from "../features/screenUsage/screens/PredictionHistoryScreen";
+import ScreenUsageHome from "../features/screenUsage/screens/ScreenUsageHome";
+import TestUsageScreen from "../features/screenUsage/screens/TestUsageScreen";
+
 
 import { colors } from "../theme/colors";
 
@@ -263,19 +266,33 @@ export default function AppNavigator() {
             {/* Screen Usage (ScreenLogs) Module */}
             {/* ========================= */}
             <Stack.Screen
+              name="ScreenUsageHome"
+              component={ScreenUsageHome}
+              options={{ headerShown: false }}
+            />
+
+            <Stack.Screen
               name="QuestionnaireScreen"
               component={QuestionnaireScreen}
               options={{ title: "Assessment" }}
             />
+
             <Stack.Screen
               name="MentalHealthDashboard"
               component={MentalHealthDashboard}
               options={{ title: "Screen Usage Risk" }}
             />
+
             <Stack.Screen
               name="PredictionHistoryScreen"
               component={PredictionHistoryScreen}
               options={{ title: "History" }}
+            />
+
+            <Stack.Screen
+              name="TestUsage"
+              component={TestUsageScreen}
+              options={{ title: "Usage Test" }}
             />
           </>
         ) : (

@@ -7,12 +7,15 @@ import com.facebook.react.ReactHost
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 
-// ✅ Manual packages (Isolation native modules)
-import com.screenmindapp.isolation.UsageStatsPackage
+// ✅ Isolation native modules
 import com.screenmindapp.isolation.ServiceStarterPackage
 import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
+import com.screenmindapp.isolation.UsageStatsPackage as IsolationUsageStatsPackage
+
+// ✅ Screen Usage native module
+import com.screenmindapp.screenUsage.UsageStatsPackage as ScreenUsageUsageStatsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -22,14 +25,15 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
 
-          // ✅ Register Isolation native packages
-          add(UsageStatsPackage())
+          // ✅ Isolation packages (keep as-is)
+          add(IsolationUsageStatsPackage())
           add(ServiceStarterPackage())
           add(IsolationMetricsPackage())
           add(BehaviourMetricsPackage())
           add(CommunicationStatsPackage())
 
-          // Packages that cannot be autolinked yet can be added manually here
+          // ✅ Screen Usage package (your one)
+          add(ScreenUsageUsageStatsPackage())
         },
     )
   }
