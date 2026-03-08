@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, FlatList } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 
@@ -33,7 +33,7 @@ export default function IsolationTrendsScreen() {
   const chartData = range === "Week" ? ui.weekPoints : range === "Month" ? ui.monthPoints : ui.monthPoints;
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.headerRow}>
@@ -107,7 +107,7 @@ export default function IsolationTrendsScreen() {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

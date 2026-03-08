@@ -1,4 +1,4 @@
-import { getScreenTimeLast24hMs, scanBluetoothCountOnce, getPrefs } from "./isolationCollectors";
+import { getScreenTimeLast24hMs, scanBluetoothCountOnce, getPrefs } from "./isolationCollector";
 import { computeIsolationRisk } from "./computeIsolationRisk";
 import { upsertDailyIsolationRecord } from "./isolationStorage"; // your existing storage
 

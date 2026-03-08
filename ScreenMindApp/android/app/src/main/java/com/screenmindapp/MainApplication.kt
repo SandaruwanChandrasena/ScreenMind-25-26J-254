@@ -13,6 +13,7 @@ import com.screenmindapp.isolation.ServiceStarterPackage
 import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
+import com.screenmindapp.isolation.WifiMetricsPackage
 
 // ✅ Sleep native modules
 import com.screenmindapp.sleep.SleepEventPackage
@@ -39,6 +40,7 @@ class MainApplication : Application(), ReactApplication {
           add(IsolationMetricsPackage())
           add(BehaviourMetricsPackage())
           add(CommunicationStatsPackage())
+          add(WifiMetricsPackage())
 
           // ✅ Sleep packages
           add(SleepEventPackage())

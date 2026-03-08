@@ -9,6 +9,16 @@ import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 
 const { CommunicationStats } = NativeModules;
 
+function emptyCommunicationStats() {
+  return {
+    callsPerDay: 0,
+    avgCallDurationSeconds: 0,
+    uniqueContacts: 0,
+    smsCountPerDay: 0,
+    interactionSilenceHours: 0,
+  };
+}
+
 if (!CommunicationStats) {
   console.warn('⚠️ CommunicationStats native module not found');
 }
@@ -92,14 +102,41 @@ export async function getCommunicationStats() {
  */
 export async function getCommunicationStatsWithPermission() {
   const perms = await checkCommunicationPermissions();
+  const hasAllPermissions = perms.callLog && perms.sms;
   
-  if (!perms.callLog || !perms.sms) {
+  if (!hasAllPermissions) {
     const granted = await requestCommunicationPermissions();
     if (!granted) {
-      console.log('Communication permissions not granted');
-      return null;
+      if (__DEV__) {
+        console.warn('[C2][Communication] Permissions not granted', perms);
+      }
+      return {
+        ...emptyCommunicationStats(),
+        _meta: {
+          permissionDenied: true,
+          permissionState: perms,
+        },
+      };
     }
   }
 
-  return await getCommunicationStats();
+  const stats = await getCommunicationStats();
+  if (!stats) {
+    return {
+      ...emptyCommunicationStats(),
+      _meta: {
+        unavailable: true,
+        permissionDenied: false,
+      },
+    };
+  }
+
+  return {
+    ...emptyCommunicationStats(),
+    ...stats,
+    _meta: {
+      permissionDenied: false,
+      permissionState: { callLog: true, sms: true },
+    },
+  };
 }

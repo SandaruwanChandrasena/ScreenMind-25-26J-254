@@ -22,12 +22,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
 
-    <!-- sleep -->
+    <!-- Sleep -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-
-
 
     <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -51,11 +49,13 @@
     <!-- System Overlay (Social Media - draw over other apps) -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
-    <!-- Foreground Service (Overlay) -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
-    <!-- Optional -->
+    <!-- WiFi -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <!-- Communication metadata (Isolation social interaction) -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_SMS" />
 
     <!-- ===================== -->
     <!-- Package visibility (Android 11+) -->
@@ -93,8 +93,6 @@
             android:foregroundServiceType="dataSync"
             android:exported="false" />
 
-        <!-- Permissions needed -->
-
         <!-- ===================== -->
         <!-- Isolation Foreground Location Service -->
         <!-- ===================== -->
@@ -128,6 +126,7 @@
 
         <!-- ===================== -->
         <!-- Overlay Service (Social Media - system overlay) -->
+        <!-- ===================== -->
         <service
             android:name=".socialmedia.OverlayService"
             android:exported="false"
