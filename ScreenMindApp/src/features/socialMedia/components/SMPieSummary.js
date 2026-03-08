@@ -1,35 +1,41 @@
-import React, { useMemo } from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { colors } from "../../../theme/colors";
-import { spacing } from "../../../theme/spacing";
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '../../../theme/colors';
+import { spacing } from '../../../theme/spacing';
 
 /**
- * data: [{ label, value, color }]
- * value >= 0
+ * data:       [{ label, value, color }]
+ * score:      optional override for the badge number (e.g. risk %)
+ * scoreLabel: optional label under the badge number (default "Score")
  */
 export default function SMPieSummary({
-  title = "Signal Breakdown",
-  subtitle = "Tap the icon to view full metrics",
+  title = 'Signal Breakdown',
+  subtitle = 'Tap the icon to view full metrics',
   data = [],
+  score = null, // ✅ pass real risk % from parent
+  scoreLabel = 'Score',
 }) {
-  const { total, rows, score } = useMemo(() => {
-    const safe = (data || []).map((d) => ({
+  const { rows, displayScore } = useMemo(() => {
+    const safe = (data || []).map(d => ({
       ...d,
       value: Math.max(0, Number(d.value) || 0),
     }));
     const t = safe.reduce((acc, d) => acc + d.value, 0) || 1;
 
-    const normalized = safe.map((d) => ({
+    const normalized = safe.map(d => ({
       ...d,
       pct: Math.round((d.value / t) * 100),
       frac: d.value / t,
     }));
 
-    // Simple score (0–100) just for UI
-    const s = Math.min(100, Math.max(0, Math.round((t / 100) * 100)));
+    // Use passed score prop if available, otherwise fallback to count-based
+    const s =
+      score !== null
+        ? score
+        : Math.min(100, Math.max(0, Math.round((t / 100) * 100)));
 
-    return { total: t, rows: normalized, score: s };
-  }, [data]);
+    return { total: t, rows: normalized, displayScore: s };
+  }, [data, score]);
 
   return (
     <View style={styles.card}>
@@ -39,12 +45,12 @@ export default function SMPieSummary({
           <Text style={styles.sub}>{subtitle}</Text>
         </View>
 
-        {/* ✅ Donut-like badge */}
+        {/* ✅ Score badge — shows real risk % */}
         <View style={styles.badgeWrap}>
           <View style={styles.badgeOuter}>
             <View style={styles.badgeInner}>
-              <Text style={styles.badgeNum}>{score}</Text>
-              <Text style={styles.badgeLabel}>Score</Text>
+              <Text style={styles.badgeNum}>{displayScore}</Text>
+              <Text style={styles.badgeLabel}>{scoreLabel}</Text>
             </View>
           </View>
         </View>
@@ -61,7 +67,12 @@ export default function SMPieSummary({
           </Text>
 
           <View style={styles.barTrack}>
-            <View style={[styles.barFill, { width: `${r.pct}%`, backgroundColor: r.color }]} />
+            <View
+              style={[
+                styles.barFill,
+                { width: `${r.pct}%`, backgroundColor: r.color },
+              ]}
+            />
           </View>
 
           <Text style={styles.pct}>{r.pct}%</Text>
@@ -80,9 +91,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
 
-  topRow: { flexDirection: "row", alignItems: "center" },
+  topRow: { flexDirection: 'row', alignItems: 'center' },
 
-  title: { color: colors.text, fontWeight: "900", fontSize: 14 },
+  title: { color: colors.text, fontWeight: '900', fontSize: 14 },
   sub: { color: colors.muted, marginTop: 4, fontSize: 12, lineHeight: 16 },
 
   badgeWrap: { marginLeft: spacing.md },
@@ -92,39 +103,52 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: "rgba(255,255,255,0.04)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badgeInner: {
     width: 52,
     height: 52,
     borderRadius: 16,
-    backgroundColor: "rgba(18,26,51,0.92)",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: 'rgba(18,26,51,0.92)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  badgeNum: { color: colors.text, fontWeight: "900", fontSize: 16, lineHeight: 18 },
-  badgeLabel: { color: colors.faint, fontWeight: "800", fontSize: 10, marginTop: 2 },
+  badgeNum: {
+    color: colors.text,
+    fontWeight: '900',
+    fontSize: 16,
+    lineHeight: 18,
+  },
+  badgeLabel: {
+    color: colors.faint,
+    fontWeight: '800',
+    fontSize: 10,
+    marginTop: 2,
+  },
 
-  row: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   dot: { width: 10, height: 10, borderRadius: 3, marginRight: 10 },
-  rowLabel: { color: colors.muted, width: 90, fontSize: 12, fontWeight: "700" },
+  rowLabel: { color: colors.muted, width: 90, fontSize: 12, fontWeight: '700' },
 
   barTrack: {
     flex: 1,
     height: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    overflow: "hidden",
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    overflow: 'hidden',
     marginHorizontal: 10,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  barFill: {
-    height: "100%",
-    borderRadius: 999,
-  },
+  barFill: { height: '100%', borderRadius: 999 },
 
-  pct: { color: colors.text, fontWeight: "900", fontSize: 12, width: 40, textAlign: "right" },
+  pct: {
+    color: colors.text,
+    fontWeight: '900',
+    fontSize: 12,
+    width: 40,
+    textAlign: 'right',
+  },
 });

@@ -85,41 +85,109 @@ export function startSleepEventTracking(sessionId, uid = null) {
   );
 
   // Handle charging events (proxy for bedtime)
-  const chargingStartSub = emitter.addListener(
-    "SLEEP_CHARGING_START",
-    async (event) => {
-      try {
-        const ts = event?.ts ?? Date.now();
-        await logScreenEvent({
-          userId,
-          sessionId: currentSessionId,
-          eventType: "CHARGING_START",
-          ts,
-        });
-        console.log("🔌 Charging start logged:", ts);
-      } catch (e) {
-        console.log("Charging start log error:", e);
-      }
-    }
-  );
+  // const chargingStartSub = emitter.addListener(
+  //   "SLEEP_CHARGING_START",
+  //   async (event) => {
+  //     try {
+  //       const ts = event?.ts ?? Date.now();
+  //       await logScreenEvent({
+  //         userId,
+  //         sessionId: currentSessionId,
+  //         eventType: "CHARGING_START",
+  //         ts,
+  //       });
+  //       console.log("🔌 Charging start logged:", ts);
+  //     } catch (e) {
+  //       console.log("Charging start log error:", e);
+  //     }
+  //   }
+  // );
 
-  const chargingStopSub = emitter.addListener(
-    "SLEEP_CHARGING_STOP",
-    async (event) => {
-      try {
-        const ts = event?.ts ?? Date.now();
-        await logScreenEvent({
-          userId,
-          sessionId: currentSessionId,
-          eventType: "CHARGING_STOP",
-          ts,
-        });
-        console.log("🔋 Charging stop logged:", ts);
-      } catch (e) {
-        console.log("Charging stop log error:", e);
-      }
+  // const chargingStopSub = emitter.addListener(
+  //   "SLEEP_CHARGING_STOP",
+  //   async (event) => {
+  //     try {
+  //       const ts = event?.ts ?? Date.now();
+  //       await logScreenEvent({
+  //         userId,
+  //         sessionId: currentSessionId,
+  //         eventType: "CHARGING_STOP",
+  //         ts,
+  //       });
+  //       console.log("🔋 Charging stop logged:", ts);
+  //     } catch (e) {
+  //       console.log("Charging stop log error:", e);
+  //     }
+  //   }
+  // );
+
+// In sleepEventService.js — update the chargingStartSub handler:
+
+const chargingStartSub = emitter.addListener(
+  "SLEEP_CHARGING_START",
+  async (event) => {
+    try {
+      const ts = event?.ts ?? Date.now();
+      await logScreenEvent({
+        userId,
+        sessionId: currentSessionId,
+        eventType: "CHARGING_START",
+        ts,
+        meta: JSON.stringify({
+          batteryLevel: event?.batteryLevel,
+          isLikelyBedtime: event?.isLikelyBedtime,
+        }),
+      });
+
+      // Also log to charging_events table
+      await logChargingEvent({
+        userId,
+        sessionId: currentSessionId,
+        eventType: 'CHARGING_START',
+        ts,
+        batteryLevel: event?.batteryLevel,
+        isLikelyBedtime: event?.isLikelyBedtime,
+      });
+
+      console.log("🔌 Charging start logged, bedtime?:", event?.isLikelyBedtime);
+    } catch (e) {
+      console.log("Charging start log error:", e);
     }
-  );
+  }
+);
+
+const chargingStopSub = emitter.addListener(
+  "SLEEP_CHARGING_STOP",
+  async (event) => {
+    try {
+      const ts = event?.ts ?? Date.now();
+      await logScreenEvent({
+        userId,
+        sessionId: currentSessionId,
+        eventType: "CHARGING_STOP",
+        ts,
+        meta: JSON.stringify({
+          batteryLevel: event?.batteryLevel,
+          isLikelyWakeTime: event?.isLikelyWakeTime,
+        }),
+      });
+
+      await logChargingEvent({
+        userId,
+        sessionId: currentSessionId,
+        eventType: 'CHARGING_STOP',
+        ts,
+        batteryLevel: event?.batteryLevel,
+        isLikelyWakeTime: event?.isLikelyWakeTime,
+      });
+
+      console.log("🔋 Charging stop logged, wake time?:", event?.isLikelyWakeTime);
+    } catch (e) {
+      console.log("Charging stop log error:", e);
+    }
+  }
+);
+
 
   eventSubscriptions = [
     unlockSub,

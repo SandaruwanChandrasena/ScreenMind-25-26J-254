@@ -1,0 +1,22 @@
+{
+  "model_type": "sleep_risk_prediction",
+  "sequence_length": 7,
+  "n_features": 8,
+  "features": [
+    "screen_time_night_mins",
+    "unlocks_night",
+    "notifications_night",
+    "social_media_mins",
+    "last_screen_off_hour",
+    "snoring_mins",
+    "restlessness_percent",
+    "day_of_week"
+  ],
+  "n_classes": 3,
+  "labels": {
+    "0": "LOW",
+    "1": "MODERATE",
+    "2": "HIGH"
+  },
+  "version": "1.0"
+}

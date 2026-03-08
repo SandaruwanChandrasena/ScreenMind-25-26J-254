@@ -14,6 +14,11 @@ import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
 import com.screenmindapp.sleep.SleepEventPackage
+import com.screenmindapp.sleep.SettingsAccessPackage
+
+// ✅ Social Media native modules
+import com.screenmindapp.socialmedia.DeviceControlPackage
+import com.screenmindapp.socialmedia.OverlayPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -30,8 +35,12 @@ class MainApplication : Application(), ReactApplication {
           add(BehaviourMetricsPackage())
           add(CommunicationStatsPackage())
           add(SleepEventPackage())
+          add(SettingsAccessPackage())
 
-          // Packages that cannot be autolinked yet can be added manually here
+          // ✅ Social Media native packages
+          add(DeviceControlPackage())
+          add(OverlayPackage())
+
         },
     )
   }
