@@ -2,11 +2,26 @@
 
 import { NativeModules } from 'react-native';
 import { loadSleepSchedule, isWithinNightWindow } from './sleepSettingsService';
-import { getSessionSummary } from './sleepRepository';
+import { getSessionSummary, isScreenCurrentlyOn } from './sleepRepository';
 
 const { SleepEventModule } = NativeModules;
 
-const WARNING_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+function getNotificationModule() {
+  const eventModule = NativeModules?.SleepEventModule;
+  if (eventModule && typeof eventModule.sendLocalNotification === 'function') {
+    return eventModule;
+  }
+
+  const sensorModule = NativeModules?.SleepSensorModule;
+  if (sensorModule && typeof sensorModule.sendLocalNotification === 'function') {
+    return sensorModule;
+  }
+
+  return null;
+}
+
+// const WARNING_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes
+const WARNING_COOLDOWN_MS = 0;
 
 let warningIntervalId = null;
 let bedtimeReminderTimeoutId = null;
@@ -16,7 +31,7 @@ let lastWarningSentAt = null;
 // LATE NIGHT USAGE MONITOR
 // ─────────────────────────────────────────────
 
-export function startLateNightWarningMonitor(sessionId) {
+export function startLateNightWarningMonitor(sessionId = null) {
   stopLateNightWarningMonitor();
 
   // Check every 5 minutes
@@ -26,9 +41,11 @@ export function startLateNightWarningMonitor(sessionId) {
     } catch (e) {
       console.log('Late night check error:', e);
     }
-  }, 5 * 60 * 1000);
+  }, 10 * 1000);
 
-  console.log('⏰ Late night warning monitor started');
+  //  }, 5 * 60 * 1000);
+
+  console.log('⏰ Late night warning monitor started', sessionId ? `(session ${sessionId})` : '(passive)');
 }
 
 export function stopLateNightWarningMonitor() {
@@ -44,22 +61,50 @@ async function checkAndWarnIfLateNight(sessionId) {
 
   // Only warn during the user's night window
   const isNight = isWithinNightWindow(now, settings);
-  if (!isNight) return;
+  // if (!isNight) return;
 
   // Cooldown — don't spam the user
   if (lastWarningSentAt && (now - lastWarningSentAt) < WARNING_COOLDOWN_MS) {
     return;
   }
 
-  // Check if phone is being actively used
-  const summary = await getSessionSummary(sessionId);
-  if (!summary) return;
+  if (sessionId) {
+    // Session active: use tracked data to send a smarter, specific warning
+    const summary = await getSessionSummary(sessionId);
+    if (!summary) return;
 
-  const recentlyActive = (summary.unlockCount ?? 0) > 0;
-  if (!recentlyActive) return;
+    const usingSocialMedia = (summary.socialNotifCount ?? 0) > 0;
+    const recentlyActive = (summary.unlockCount ?? 0) > 0;
 
-  lastWarningSentAt = now;
-  sendLateNightWarning(settings);
+    if (!recentlyActive && !usingSocialMedia) return;
+
+    lastWarningSentAt = now;
+
+    if (usingSocialMedia) {
+      sendSocialMediaWarning(settings);
+    } else {
+      sendLateNightWarning(settings);
+    }
+  } else {
+    // No active session: foreground service keeps JS alive, so verify screen
+    // state from SQLite before warning to avoid ghost notifications.
+    const screenOn = await isScreenCurrentlyOn();
+    if (!screenOn) return;
+
+    lastWarningSentAt = now;
+    sendLateNightWarning(settings);
+  }
+}
+
+function sendSocialMediaWarning(settings) {
+  const bedtimeStr = formatTime(settings.bedtimeHour, settings.bedtimeMinute);
+
+  sendLocalNotification(
+    '📵 Put the Phone Down',
+    `You should be asleep by ${bedtimeStr}. Scrolling social media now will delay your sleep and reduce deep sleep quality.`
+  );
+
+  console.log('📳 Social media bedtime warning sent. Usual bedtime:', bedtimeStr);
 }
 
 function sendLateNightWarning(settings) {
@@ -139,8 +184,9 @@ export async function scheduleBedtimeReminder() {
 
 function sendLocalNotification(title, message) {
   try {
-    if (SleepEventModule && typeof SleepEventModule.sendLocalNotification === 'function') {
-      SleepEventModule.sendLocalNotification(title, message);
+    const notificationModule = getNotificationModule();
+    if (notificationModule) {
+      notificationModule.sendLocalNotification(title, message);
     } else {
       // Fallback: just log if native module not ready
       console.log(`[NOTIFICATION] ${title}: ${message}`);
