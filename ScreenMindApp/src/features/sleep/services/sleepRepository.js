@@ -324,6 +324,23 @@ export async function saveMorningCheckIn({
 }
 
 /**
+ * Get the most recent morning check-in for a session.
+ * Returns the row object or null.
+ */
+export async function getMorningCheckInForSession(sessionId) {
+  const db = await getDB();
+  const rs = await exec(
+    db,
+    `SELECT * FROM morning_checkins
+     WHERE session_id = ?
+     ORDER BY ts DESC
+     LIMIT 1;`,
+    [sessionId]
+  );
+  return rs.rows.length ? rs.rows.item(0) : null;
+}
+
+/**
  * Build a "night summary" from a session
  * (counts + duration)
  */
