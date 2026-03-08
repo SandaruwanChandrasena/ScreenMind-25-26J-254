@@ -1,15 +1,15 @@
-import React, { useContext } from "react";
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
-import { createStackNavigator } from "@react-navigation/stack";
-import { View, ActivityIndicator, TouchableOpacity } from "react-native";
-import Icon from "react-native-vector-icons/Ionicons";
+import React, { useContext } from 'react';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import { View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import Icon from 'react-native-vector-icons/Ionicons';
 
-import { AuthContext } from "../context/AuthContext";
+import { AuthContext } from '../context/AuthContext';
 
-import SignInScreen from "../screens/SignInScreen";
-import SignUpScreen from "../screens/SignUpScreen";
-import DashboardScreen from "../screens/DashboardScreen";
-import ProfileScreen from "../screens/ProfileScreen";
+import SignInScreen from '../screens/SignInScreen';
+import SignUpScreen from '../screens/SignUpScreen';
+import DashboardScreen from '../screens/DashboardScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 
 /* ========================= */
 /* ✅ Social Media Screens */
@@ -23,41 +23,43 @@ import {
   SMHistoryScreen,
   SMPrivacyScreen,
   SM_ROUTES,
-} from "../features/socialMedia";
+} from '../features/socialMedia';
 
 /* ========================= */
 /* ✅ Isolation Screens */
 /* ========================= */
-import IsolationOverviewScreen from "../features/isolation/screens/IsolationOverviewScreen";
-import IsolationWhyScreen from "../features/isolation/screens/IsolationWhyScreen";
-import IsolationInsightsScreen from "../features/isolation/screens/IsolationInsightsScreen";
-import IsolationTrendsScreen from "../features/isolation/screens/IsolationTrendsScreen";
-import IsolationSuggestionsScreen from "../features/isolation/screens/IsolationSuggestionsScreen";
-import IsolationStatsScreen from "../features/isolation/screens/IsolationStatsScreen";
-import MobilityInsightsScreen from "../features/isolation/screens/MobilityInsightsScreen";
-import SocialInteractionScreen from "../features/isolation/screens/SocialInteractionScreen";
-import BehaviourInsightsScreen from "../features/isolation/screens/BehaviourInsightsScreen";
-import ProximityExposureScreen from "../features/isolation/screens/ProximityExposureScreen";
-import IsolationPrivacyScreen from "../features/isolation/screens/IsolationPrivacyScreen";
+import IsolationOverviewScreen from '../features/isolation/screens/IsolationOverviewScreen';
+import IsolationWhyScreen from '../features/isolation/screens/IsolationWhyScreen';
+import IsolationInsightsScreen from '../features/isolation/screens/IsolationInsightsScreen';
+import IsolationTrendsScreen from '../features/isolation/screens/IsolationTrendsScreen';
+import IsolationSuggestionsScreen from '../features/isolation/screens/IsolationSuggestionsScreen';
+import IsolationStatsScreen from '../features/isolation/screens/IsolationStatsScreen';
+import MobilityInsightsScreen from '../features/isolation/screens/MobilityInsightsScreen';
+import SocialInteractionScreen from '../features/isolation/screens/SocialInteractionScreen';
+import BehaviourInsightsScreen from '../features/isolation/screens/BehaviourInsightsScreen';
+import ProximityExposureScreen from '../features/isolation/screens/ProximityExposureScreen';
+import IsolationPrivacyScreen from '../features/isolation/screens/IsolationPrivacyScreen';
 
 /* ========================= */
 /* ✅ Sleep Screens */
 /* ========================= */
-import SleepHomeScreen from "../features/sleep/screens/SleepHomeScreen";
-import MorningCheckInScreen from "../features/sleep/screens/MorningCheckInScreen";
-import SleepDetailsScreen from "../features/sleep/screens/SleepDetailsScreen";
-import DataPermissionsScreen from "../features/sleep/screens/DataPermissionsScreen";
-import SnoringScreen from "../features/sleep/screens/SnoringScreen";
-import SleepScheduleScreen from "../features/sleep/screens/SleepScheduleScreen";
+import SleepHomeScreen from '../features/sleep/screens/SleepHomeScreen';
+import MorningCheckInScreen from '../features/sleep/screens/MorningCheckInScreen';
+import SleepDetailsScreen from '../features/sleep/screens/SleepDetailsScreen';
+import DataPermissionsScreen from '../features/sleep/screens/DataPermissionsScreen';
+import SnoringScreen from '../features/sleep/screens/SnoringScreen';
+import SleepScheduleScreen from '../features/sleep/screens/SleepScheduleScreen'; // ✅ from friend
 
 /* ========================= */
 /* ✅ Screen Usage (ScreenLogs) Screens */
 /* ========================= */
-import QuestionnaireScreen from "../features/screenUsage/screens/QuestionnaireScreen";
-import MentalHealthDashboard from "../features/screenUsage/screens/MentalHealthDashboard";
-import PredictionHistoryScreen from "../features/screenUsage/screens/PredictionHistoryScreen";
+import QuestionnaireScreen from '../features/screenUsage/screens/QuestionnaireScreen';
+import MentalHealthDashboard from '../features/screenUsage/screens/MentalHealthDashboard';
+import PredictionHistoryScreen from '../features/screenUsage/screens/PredictionHistoryScreen';
+import ScreenUsageHome from '../features/screenUsage/screens/ScreenUsageHome'; // ✅ yours
+import TestUsageScreen from '../features/screenUsage/screens/TestUsageScreen'; // ✅ yours
 
-import { colors } from "../theme/colors";
+import { colors } from '../theme/colors';
 
 const Stack = createStackNavigator();
 
@@ -81,8 +83,8 @@ export default function AppNavigator() {
       <View
         style={{
           flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
+          justifyContent: 'center',
+          alignItems: 'center',
           backgroundColor: colors.bg1,
         }}
       >
@@ -97,7 +99,7 @@ export default function AppNavigator() {
         screenOptions={{
           headerStyle: { backgroundColor: colors.bg1 },
           headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: "900" },
+          headerTitleStyle: { fontWeight: '900' },
           headerShadowVisible: false,
         }}
       >
@@ -110,10 +112,10 @@ export default function AppNavigator() {
               name="Dashboard"
               component={DashboardScreen}
               options={({ navigation }) => ({
-                title: "Home",
+                title: 'Home',
                 headerRight: () => (
                   <TouchableOpacity
-                    onPress={() => navigation.navigate("Profile")}
+                    onPress={() => navigation.navigate('Profile')}
                     style={{ marginRight: 16 }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
@@ -130,7 +132,7 @@ export default function AppNavigator() {
             <Stack.Screen
               name="Profile"
               component={ProfileScreen}
-              options={{ title: "Profile" }}
+              options={{ title: 'Profile' }}
             />
 
             {/* ========================= */}
@@ -139,37 +141,37 @@ export default function AppNavigator() {
             <Stack.Screen
               name={SM_ROUTES.Home}
               component={SMHomeScreen}
-              options={{ title: "Social Media" }}
+              options={{ title: 'Social Media' }}
             />
             <Stack.Screen
               name={SM_ROUTES.Journal}
               component={SMJournalScreen}
-              options={{ title: "Daily Journal" }}
+              options={{ title: 'Daily Journal' }}
             />
             <Stack.Screen
               name={SM_ROUTES.Notification}
               component={SMNotificationAnalysisScreen}
-              options={{ title: "Notification Analysis" }}
+              options={{ title: 'Notification Analysis' }}
             />
             <Stack.Screen
               name={SM_ROUTES.Ghosting}
               component={SMGhostingScreen}
-              options={{ title: "Ghosting Detector" }}
+              options={{ title: 'Ghosting Detector' }}
             />
             <Stack.Screen
               name={SM_ROUTES.Insights}
               component={SMInsightsScreen}
-              options={{ title: "Insights" }}
+              options={{ title: 'Insights' }}
             />
             <Stack.Screen
               name={SM_ROUTES.History}
               component={SMHistoryScreen}
-              options={{ title: "History" }}
+              options={{ title: 'History' }}
             />
             <Stack.Screen
               name={SM_ROUTES.Privacy}
               component={SMPrivacyScreen}
-              options={{ title: "Privacy & Ethics" }}
+              options={{ title: 'Privacy & Ethics' }}
             />
 
             {/* ========================= */}
@@ -178,7 +180,7 @@ export default function AppNavigator() {
             <Stack.Screen
               name="IsolationOverview"
               component={IsolationOverviewScreen}
-              options={{ title: "Isolation" }}
+              options={{ title: 'Isolation' }}
             />
             <Stack.Screen
               name="IsolationStats"
@@ -188,47 +190,47 @@ export default function AppNavigator() {
             <Stack.Screen
               name="IsolationWhy"
               component={IsolationWhyScreen}
-              options={{ title: "Why this risk?" }}
+              options={{ title: 'Why this risk?' }}
             />
             <Stack.Screen
               name="IsolationInsights"
               component={IsolationInsightsScreen}
-              options={{ title: "Insights" }}
+              options={{ title: 'Insights' }}
             />
             <Stack.Screen
               name="IsolationTrends"
               component={IsolationTrendsScreen}
-              options={{ title: "Trends" }}
+              options={{ title: 'Trends' }}
             />
             <Stack.Screen
               name="IsolationSuggestions"
               component={IsolationSuggestionsScreen}
-              options={{ title: "Suggestions" }}
+              options={{ title: 'Suggestions' }}
             />
             <Stack.Screen
               name="MobilityInsights"
               component={MobilityInsightsScreen}
-              options={{ title: "Mobility" }}
+              options={{ title: 'Mobility' }}
             />
             <Stack.Screen
               name="SocialInteraction"
               component={SocialInteractionScreen}
-              options={{ title: "Social Interaction" }}
+              options={{ title: 'Social Interaction' }}
             />
             <Stack.Screen
               name="BehaviourInsights"
               component={BehaviourInsightsScreen}
-              options={{ title: "Behaviour" }}
+              options={{ title: 'Behaviour' }}
             />
             <Stack.Screen
               name="ProximityExposure"
               component={ProximityExposureScreen}
-              options={{ title: "Proximity" }}
+              options={{ title: 'Proximity' }}
             />
             <Stack.Screen
               name="IsolationPrivacy"
               component={IsolationPrivacyScreen}
-              options={{ title: "Privacy & Consent" }}
+              options={{ title: 'Privacy & Consent' }}
             />
 
             {/* ========================= */}
@@ -237,27 +239,27 @@ export default function AppNavigator() {
             <Stack.Screen
               name="SleepHome"
               component={SleepHomeScreen}
-              options={{ title: "Sleep" }}
+              options={{ title: 'Sleep' }}
             />
             <Stack.Screen
               name="SleepCheckIn"
               component={MorningCheckInScreen}
-              options={{ title: "Morning Check-In" }}
+              options={{ title: 'Morning Check-In' }}
             />
             <Stack.Screen
               name="SleepDetails"
               component={SleepDetailsScreen}
-              options={{ title: "Sleep Details" }}
+              options={{ title: 'Sleep Details' }}
             />
             <Stack.Screen
               name="SleepPermissions"
               component={DataPermissionsScreen}
-              options={{ title: "Data & Permissions" }}
+              options={{ title: 'Data & Permissions' }}
             />
             <Stack.Screen
               name="SleepSnoring"
               component={SnoringScreen}
-              options={{ title: "Snoring" }}
+              options={{ title: 'Snoring' }}
             />
             <Stack.Screen
               name="SleepSchedule"
@@ -268,19 +270,29 @@ export default function AppNavigator() {
             {/* Screen Usage (ScreenLogs) Module */}
             {/* ========================= */}
             <Stack.Screen
+              name="ScreenUsageHome"
+              component={ScreenUsageHome}
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen
               name="QuestionnaireScreen"
               component={QuestionnaireScreen}
-              options={{ title: "Assessment" }}
+              options={{ title: 'Assessment' }}
             />
             <Stack.Screen
               name="MentalHealthDashboard"
               component={MentalHealthDashboard}
-              options={{ title: "Screen Usage Risk" }}
+              options={{ title: 'Screen Usage Risk' }}
             />
             <Stack.Screen
               name="PredictionHistoryScreen"
               component={PredictionHistoryScreen}
-              options={{ title: "History" }}
+              options={{ title: 'History' }}
+            />
+            <Stack.Screen
+              name="TestUsage"
+              component={TestUsageScreen}
+              options={{ title: 'Usage Test' }}
             />
           </>
         ) : (
@@ -288,12 +300,12 @@ export default function AppNavigator() {
             <Stack.Screen
               name="SignIn"
               component={SignInScreen}
-              options={{ title: "Sign In" }}
+              options={{ title: 'Sign In' }}
             />
             <Stack.Screen
               name="SignUp"
               component={SignUpScreen}
-              options={{ title: "Sign Up" }}
+              options={{ title: 'Sign Up' }}
             />
           </>
         )}

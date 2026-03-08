@@ -10,10 +10,18 @@ import { PHQ9_QUESTIONS, PHQ9_OPTIONS } from "../services/phq9";
 import { GAD7_QUESTIONS, GAD7_OPTIONS } from "../services/gad7";
 import { sumScore, phq9Severity, gad7Severity } from "../services/scoring";
 
-import { generateSimulatedDailyUsage, computeUsageRisk } from "../services/usageLogs";
+import {
+  generateSimulatedUsageWindow,
+  computeUsageRisk,
+  computeBPRI,
+} from "../services/usageLogs";
+import { getUsageStats } from "../services/usageStatsNative";
+import { extractUsageFeatures } from "../services/extractUsageFeatures";
+import { adaptRealUsageToModel } from "../services/realUsageAdapter";
 
-// ✅ local storage key
+// storage keys
 const STORAGE_KEY = "screenUsageAssessments";
+const LATEST_KEY = "screenUsageLatestAssessment";
 
 function safeJsonParse(str, fallback) {
   try {
@@ -31,10 +39,9 @@ function clamp01(v) {
   return Math.max(0, Math.min(1, v));
 }
 
-// Normalize questionnaire distress 0..1
 function distressIndex01(phq9Score, gad7Score) {
-  const phqNorm = phq9Score / 27; // 0..1
-  const gadNorm = gad7Score / 21; // 0..1
+  const phqNorm = phq9Score / 27;
+  const gadNorm = gad7Score / 21;
   return clamp01((phqNorm + gadNorm) / 2);
 }
 
@@ -42,6 +49,11 @@ function labelFrom01(score01) {
   if (score01 >= 0.67) return "High";
   if (score01 >= 0.34) return "Moderate";
   return "Low";
+}
+
+function average(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return 0;
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
 }
 
 export default function QuestionnaireScreen({ navigation }) {
@@ -70,72 +82,102 @@ export default function QuestionnaireScreen({ navigation }) {
       Alert.alert("Complete all questions", "Please answer every question before submitting.");
       return;
     }
+
     if (saving) return;
 
     setSaving(true);
 
     try {
-      // ✅ 1) Simulated usage log (try to pass q scores; if your function doesn't accept params, it still works)
-      let usageLog;
+      let usageWindow = [];
+      let usageSource = "simulated";
+      let realUsageFeatures = null;
+
       try {
-        usageLog = generateSimulatedDailyUsage({ phq9Score, gad7Score });
-      } catch {
-        usageLog = generateSimulatedDailyUsage();
+        const rawUsage = await getUsageStats();
+        const features = extractUsageFeatures(rawUsage);
+        const realUsageLog = adaptRealUsageToModel(features);
+
+        const hasRealUsage =
+          Number(realUsageLog?.totalScreenTimeMin || 0) > 0 ||
+          Number(realUsageLog?.socialMediaMin || 0) > 0 ||
+          Number(realUsageLog?.communicationMin || 0) > 0 ||
+          Number(realUsageLog?.videoMin || 0) > 0;
+
+        if (hasRealUsage) {
+          usageWindow = [realUsageLog];
+          usageSource = "real";
+          realUsageFeatures = features;
+        } else {
+          usageWindow = generateSimulatedUsageWindow(7, { phq9Score, gad7Score });
+        }
+      } catch (e) {
+        console.log("Real usage fetch failed, fallback to simulated logs:", e);
+        usageWindow = generateSimulatedUsageWindow(7, { phq9Score, gad7Score });
       }
 
-      // ✅ 2) Usage risk (0..1) + breakdown
-      const usage = computeUsageRisk(usageLog);
-      const usageRisk01 = clamp01(usage?.usageRisk ?? 0);
+      const dailyUsageRisks = usageWindow.map((log) => {
+        const u = computeUsageRisk(log);
+        return clamp01(u?.usageRisk ?? 0);
+      });
 
-      // ✅ 3) Questionnaire distress (0..1)
+      const avgUsageRisk01 = clamp01(average(dailyUsageRisks));
+
+      const bpri = computeBPRI(usageWindow);
+      const bpri01 = clamp01((bpri?.score ?? 0) / 100);
+
       const qDistress01 = distressIndex01(phq9Score, gad7Score);
 
-      // ✅ 4) Hybrid AI score (0..1)
-      // (You can change weights anytime — this is your “model”)
-      const hybridScore01 = clamp01(0.6 * qDistress01 + 0.4 * usageRisk01);
+      const hybridScore01 = clamp01(
+        0.55 * qDistress01 +
+        0.25 * avgUsageRisk01 +
+        0.20 * bpri01
+      );
+
       const aiLabel = labelFrom01(hybridScore01);
 
-      // ✅ 5) Final result object (SERIALIZABLE)
       const result = {
         id: makeId(),
         submittedAt: new Date().toISOString(),
 
-        // keep answers for research evidence
         answers,
 
         phq9: { score: phq9Score, severity: phq9.label },
         gad7: { score: gad7Score, severity: gad7.label },
 
-        // keep your old field name for compatibility
         combinedRisk: {
           label: aiLabel,
           score: Number(hybridScore01.toFixed(3)),
         },
 
-        // ✅ clearer AI output too (recommended)
         aiPrediction: {
           label: aiLabel,
           score01: Number(hybridScore01.toFixed(3)),
-          weights: { questionnaire: 0.6, usage: 0.4 },
+          signals: {
+            questionnaireDistress01: Number(qDistress01.toFixed(3)),
+            avgUsageRisk01: Number(avgUsageRisk01.toFixed(3)),
+            bpriScore: bpri?.score ?? 0,
+          },
+          weights: { questionnaire: 0.55, avgUsage: 0.25, bpri: 0.2 },
         },
 
-        // ✅ usage data stored
-        usageLog,
-        usageRisk: {
-          usageRisk01,
-          breakdown: usage?.breakdown || {},
-        },
+        usageWindow,
+        dailyUsageRisks,
+        bpri,
+        usageSource,
+        realUsageFeatures,
       };
 
-      // ✅ 6) Save to AsyncStorage history
-      const existingStr = await AsyncStorage.getItem(STORAGE_KEY);
+      console.log("✅ Assessment result:", JSON.stringify(result, null, 2));
+
+      // const existingStr = await AsyncStorage.getItem(STORAGE_KEY);
       const existing = safeJsonParse(existingStr, []);
 
       const next = Array.isArray(existing) ? [result, ...existing] : [result];
       const limited = next.slice(0, 50);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(limited));
 
-      // ✅ 7) Navigate
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(limited));
+      await AsyncStorage.setItem(LATEST_KEY, JSON.stringify(result));
+
       navigation.navigate("MentalHealthDashboard", { result });
     } catch (error) {
       console.error("LOCAL SAVE ERROR:", error);
@@ -185,6 +227,7 @@ export default function QuestionnaireScreen({ navigation }) {
           <Text style={styles.summaryLine}>
             PHQ-9: <Text style={styles.bold}>{phq9Score}</Text> ({phq9.label})
           </Text>
+
           <Text style={styles.summaryLine}>
             GAD-7: <Text style={styles.bold}>{gad7Score}</Text> ({gad7.label})
           </Text>
@@ -222,6 +265,7 @@ function QuestionBlock({ title, value, options, onChange, isSafetyItem }) {
       <View style={styles.optionsWrap}>
         {options.map((opt) => {
           const selected = value === opt.value;
+
           return (
             <Pressable
               key={opt.value}
@@ -258,9 +302,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.md,
   },
+
   qTitle: { color: colors.text, fontWeight: "800", marginBottom: spacing.sm, lineHeight: 18 },
 
   optionsWrap: { gap: 10 },
+
   option: {
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -269,10 +315,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: "rgba(255,255,255,0.03)",
   },
+
   optionSelected: {
     borderColor: "rgba(124,58,237,0.7)",
     backgroundColor: "rgba(124,58,237,0.18)",
   },
+
   optionText: { color: colors.muted, fontWeight: "700" },
   optionTextSelected: { color: colors.text },
 
@@ -286,6 +334,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     marginBottom: spacing.lg,
   },
+
   summaryTitle: { color: colors.text, fontWeight: "900", marginBottom: spacing.sm },
   summaryLine: { color: colors.muted, marginBottom: 6 },
   bold: { color: colors.text, fontWeight: "900" },
@@ -297,6 +346,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "rgba(124,58,237,0.85)",
   },
+
   submitBtnDisabled: { backgroundColor: "rgba(124,58,237,0.35)" },
+
   submitText: { color: "#fff", fontWeight: "900" },
 });

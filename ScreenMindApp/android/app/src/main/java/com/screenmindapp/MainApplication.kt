@@ -7,18 +7,23 @@ import com.facebook.react.ReactHost
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 
-// ✅ Manual packages (Isolation native modules)
-import com.screenmindapp.isolation.UsageStatsPackage
+// ✅ Isolation native modules
+import com.screenmindapp.isolation.UsageStatsPackage as IsolationUsageStatsPackage
 import com.screenmindapp.isolation.ServiceStarterPackage
 import com.screenmindapp.isolation.IsolationMetricsPackage
 import com.screenmindapp.isolation.BehaviourMetricsPackage
 import com.screenmindapp.isolation.CommunicationStatsPackage
+
+// ✅ Sleep native modules
 import com.screenmindapp.sleep.SleepEventPackage
 import com.screenmindapp.sleep.SettingsAccessPackage
 
 // ✅ Social Media native modules
 import com.screenmindapp.socialmedia.DeviceControlPackage
 import com.screenmindapp.socialmedia.OverlayPackage
+
+// ✅ Screen Usage native module
+import com.screenmindapp.screenUsage.UsageStatsPackage as ScreenUsageUsageStatsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -28,18 +33,23 @@ class MainApplication : Application(), ReactApplication {
       packageList =
         PackageList(this).packages.apply {
 
-          // ✅ Register Isolation native packages
-          add(UsageStatsPackage())
+          // ✅ Isolation packages
+          add(IsolationUsageStatsPackage())
           add(ServiceStarterPackage())
           add(IsolationMetricsPackage())
           add(BehaviourMetricsPackage())
           add(CommunicationStatsPackage())
+
+          // ✅ Sleep packages
           add(SleepEventPackage())
           add(SettingsAccessPackage())
 
-          // ✅ Social Media native packages
+          // ✅ Social Media packages
           add(DeviceControlPackage())
           add(OverlayPackage())
+
+          // ✅ Screen Usage package
+          add(ScreenUsageUsageStatsPackage())
 
         },
     )
