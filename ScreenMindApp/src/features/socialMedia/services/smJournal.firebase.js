@@ -31,20 +31,26 @@ async function getUserId() {
 // Firestore path:
 //   users/{user_id}/journal_entries/{auto_id}
 //
-// Entry shape saved:
-//   text, mood, createdAt, sentiment (if analyzed)
+// BUG FIX: pages array was missing from doc_data — all multi-page
+//          content was silently discarded on save.
 // ─────────────────────────────────────────────────────────────
 export async function saveJournalToFirebase(entry) {
   try {
     const userId = await getUserId();
     const db = getFirestore(getApp());
 
-    // Build the document
+    // BUG FIX #1: Include pages in the document so multi-page
+    // entries are fully persisted to Firestore.
     const doc_data = {
       text: entry.text,
       mood: entry.mood || null,
       createdAt: entry.createdAt || new Date().toISOString(),
-      sentiment: entry.sentiment || null, // from analyzeJournalText() if available
+      sentiment: entry.sentiment || null,
+      // ✅ FIXED: was missing — caused silent data loss for multi-page entries
+      pages:
+        Array.isArray(entry.pages) && entry.pages.length > 0
+          ? entry.pages
+          : [{ id: '1', title: 'Page 1', text: entry.text, format: {} }],
     };
 
     // Save to Firestore → returns doc reference with auto ID
@@ -52,6 +58,11 @@ export async function saveJournalToFirebase(entry) {
     const docRef = await addDoc(colRef, doc_data);
 
     console.log(`✅ Journal saved to Firebase: ${docRef.id}`);
+    console.log(
+      `   Pages: ${doc_data.pages.length} | Sentiment: ${
+        entry.sentiment?.riskLevel || 'none'
+      }`,
+    );
 
     // Also save locally — store docId so we can delete later
     const entryWithId = { ...entry, firebaseId: docRef.id };
@@ -70,6 +81,9 @@ export async function saveJournalToFirebase(entry) {
 // ─────────────────────────────────────────────────────────────
 // ✅ LOAD all journal entries from Firebase
 // Falls back to AsyncStorage if Firebase fails
+//
+// BUG FIX: Old entries saved before this fix won't have `pages`.
+// We normalise the shape here so the UI never crashes on missing pages.
 // ─────────────────────────────────────────────────────────────
 export async function loadJournalFromFirebase() {
   try {
@@ -87,12 +101,27 @@ export async function loadJournalFromFirebase() {
       return [];
     }
 
-    // Map docs → include Firestore doc ID as firebaseId
-    const entries = snapshot.docs.map(d => ({
-      id: d.id, // local UI key
-      firebaseId: d.id, // same — Firestore doc ID
-      ...d.data(),
-    }));
+    // Map docs → normalise shape for backward compatibility
+    const entries = snapshot.docs.map(d => {
+      const data = d.data();
+
+      // BUG FIX #2: Old docs may not have `pages` field.
+      // Ensure pages always exists so the UI doesn't crash.
+      const pages =
+        Array.isArray(data.pages) && data.pages.length > 0
+          ? data.pages
+          : [{ id: '1', title: 'Page 1', text: data.text || '', format: {} }];
+
+      return {
+        id: d.id,
+        firebaseId: d.id,
+        text: data.text || '',
+        mood: data.mood || null,
+        createdAt: data.createdAt || null,
+        sentiment: data.sentiment || null,
+        pages,
+      };
+    });
 
     console.log(`✅ Loaded ${entries.length} journal entries from Firebase`);
 
@@ -160,5 +189,58 @@ async function _syncLocalStorage(userId, entry, action) {
     await AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(entries));
   } catch (e) {
     console.log('❌ Local sync error:', e.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// ✅ UPDATE an existing journal entry in Firebase
+// Called by the Edit modal when user saves changes
+// ─────────────────────────────────────────────────────────────
+export async function updateJournalInFirebase(firebaseId, updatedEntry) {
+  try {
+    const userId = await getUserId();
+    const db = getFirestore(getApp());
+
+    const docRef = doc(db, 'users', userId, 'journal_entries', firebaseId);
+
+    // Only update fields that can change — never overwrite createdAt
+    const patch = {
+      text: updatedEntry.text || '',
+      mood: updatedEntry.mood || null,
+      pages: Array.isArray(updatedEntry.pages) ? updatedEntry.pages : [],
+      sentiment: updatedEntry.sentiment || null,
+      updatedAt: updatedEntry.updatedAt || new Date().toISOString(),
+    };
+
+    // Firestore setDoc with merge:true updates only provided fields
+    const { setDoc } = await import('@react-native-firebase/firestore');
+    await setDoc(docRef, patch, { merge: true });
+
+    console.log(`✅ Journal entry updated: ${firebaseId}`);
+
+    // Sync local backup
+    await _syncLocalUpdate(updatedEntry);
+
+    return { success: true };
+  } catch (e) {
+    console.log('❌ Firebase journal update error:', e.message);
+    return { success: false };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// 🔒 PRIVATE — update one entry in AsyncStorage backup
+// ─────────────────────────────────────────────────────────────
+async function _syncLocalUpdate(updatedEntry) {
+  try {
+    const raw = await AsyncStorage.getItem(LOCAL_KEY);
+    let entries = raw ? JSON.parse(raw) : [];
+    const key = updatedEntry.firebaseId || updatedEntry.id;
+    entries = entries.map(e =>
+      (e.firebaseId || e.id) === key ? { ...e, ...updatedEntry } : e,
+    );
+    await AsyncStorage.setItem(LOCAL_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.log('❌ Local update sync error:', e.message);
   }
 }

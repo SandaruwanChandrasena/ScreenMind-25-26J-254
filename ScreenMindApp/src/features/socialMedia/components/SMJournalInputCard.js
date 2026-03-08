@@ -1,12 +1,17 @@
 /**
  * SMJournalInputCard — Premium Multi-Page Journal Input
  *
- * Props:
- *   text            string                      controlled text (current page)
- *   onChangeText    (string) => void
- *   selectedMood    object | null
- *   onSelectMood    (mood | null) => void
- *   onPagesChange   (pages: Page[]) => void     all pages, called after state settles
+ * FIXES IN THIS VERSION:
+ *
+ * FIX 1 — Edit mode shows blank text (root cause):
+ *   The component always initialised pages with [makePage(0)] — a fresh blank page.
+ *   The `text` prop was only used to DETECT a Clear action (text going '' from non-empty).
+ *   It was never used to SEED the page content on mount.
+ *   Fix: Added `initialPages` prop. When provided (edit mode), useState seeds from it.
+ *   EditModal now passes entry.pages as initialPages so existing content loads correctly.
+ *
+ * FIX 2 — suppressResetRef for add/delete/navigate page actions.
+ *   (carried over from previous fix — prevents text erase on + Page)
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -71,10 +76,18 @@ const makePage = (index = 0) => ({
   format: { ...DEFAULT_FORMAT },
 });
 
+// Normalise a page loaded from Firebase — it may be missing fields
+const normalisePage = (p, index) => ({
+  id: p.id || `${Date.now()}-${index}`,
+  title: p.title || `Page ${index + 1}`,
+  text: p.text || '',
+  format: p.format ? { ...DEFAULT_FORMAT, ...p.format } : { ...DEFAULT_FORMAT },
+});
+
 const hexFor = key => TEXT_COLORS.find(c => c.key === key)?.hex ?? '#FFFFFF';
 const sizeFor = key => FONT_SIZES.find(f => f.key === key)?.size ?? 16;
 
-// ─── Animated toolbar button ──────────────────────────────────────────────────
+// ─── Toolbar button ───────────────────────────────────────────────────────────
 
 function TBtn({
   label,
@@ -167,56 +180,75 @@ export default function SMJournalInputCard({
   selectedMood,
   onSelectMood,
   onPagesChange,
+  // FIX 1: New prop — pass entry.pages when opening in edit mode
+  // so the card pre-populates with existing content instead of a blank page.
+  initialPages,
   placeholder = 'Begin writing…',
 }) {
-  const [pages, setPages] = useState(() => [makePage(0)]);
+  // FIX 1: Seed pages from initialPages if provided, otherwise start blank.
+  const [pages, setPages] = useState(() => {
+    if (Array.isArray(initialPages) && initialPages.length > 0) {
+      return initialPages.map(normalisePage);
+    }
+    return [makePage(0)];
+  });
+
   const [currentIdx, setCurrentIdx] = useState(0);
   const [tab, setTab] = useState('style');
   const [editingTitle, setEditingTitle] = useState(false);
 
-  const titleRef = useRef(null);
   const textRef = useRef(null);
 
-  // ── Keep a ref of latest onPagesChange to avoid stale closures ───────────
+  // ── Stable ref wrappers ───────────────────────────────────────────────────
   const onPagesChangeRef = useRef(onPagesChange);
+  const onChangeTextRef = useRef(onChangeText);
   useEffect(() => {
     onPagesChangeRef.current = onPagesChange;
   }, [onPagesChange]);
-
-  const onChangeTextRef = useRef(onChangeText);
   useEffect(() => {
     onChangeTextRef.current = onChangeText;
   }, [onChangeText]);
 
-  // ── Notify parent AFTER pages state has settled (never during render) ─────
+  // ── Suppress reset guard during programmatic navigation ──────────────────
+  // Prevents addPage / deletePage / goTo from triggering the "Clear detected" wipe.
+  const suppressResetRef = useRef(false);
+
+  // ── Notify parent of pages after state settles ────────────────────────────
   useEffect(() => {
     onPagesChangeRef.current?.(pages);
   }, [pages]);
 
-  // ── Notify parent of current page text after navigation ──────────────────
+  // ── Sync parent text when page changes ───────────────────────────────────
   useEffect(() => {
     onChangeTextRef.current?.(pages[currentIdx]?.text ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIdx]);
 
-  // ── Reset all pages when parent clears (text goes '' from non-empty) ──────
+  // ── Detect parent-initiated Clear ────────────────────────────────────────
   const prevTextRef = useRef(text);
   useEffect(() => {
-    if (text === '' && prevTextRef.current !== '') {
+    const wasNonEmpty = prevTextRef.current !== '';
+    const isNowEmpty = text === '';
+    prevTextRef.current = text;
+
+    if (isNowEmpty && wasNonEmpty) {
+      if (suppressResetRef.current) {
+        suppressResetRef.current = false;
+        return;
+      }
+      // Genuine Clear — reset all pages
       setPages([makePage(0)]);
       setCurrentIdx(0);
     }
-    prevTextRef.current = text;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [text]);
 
-  // ── Derived from current page ─────────────────────────────────────────────
+  // ── Derived ───────────────────────────────────────────────────────────────
   const page = pages[currentIdx] ?? pages[0];
   const fmt = page?.format ?? DEFAULT_FORMAT;
   const chars = page?.text?.length ?? 0;
 
-  // ── Pure state setters — NO parent callbacks inside updater fn ────────────
-
+  // ── State helpers ─────────────────────────────────────────────────────────
   const patchPage = useCallback((idx, patch) => {
     setPages(prev => prev.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
   }, []);
@@ -245,36 +277,27 @@ export default function SMJournalInputCard({
     );
   }, [currentIdx]);
 
-  // ── Text change ───────────────────────────────────────────────────────────
   const handleText = useCallback(
     val => {
       if (val.length > MAX_CHARS) return;
       setPages(prev =>
         prev.map((p, i) => (i === currentIdx ? { ...p, text: val } : p)),
       );
-      // Sync parent text immediately (this is a user event, not a render)
       onChangeTextRef.current?.(val);
     },
     [currentIdx],
   );
 
-  // ── Page navigation ───────────────────────────────────────────────────────
   const goTo = useCallback(
     idx => {
-      setPages(prev => {
-        if (idx < 0 || idx >= prev.length) return prev;
-        return prev; // no change to pages, just navigate
-      });
-      setCurrentIdx(prev => {
-        if (idx < 0 || idx >= pages.length) return prev;
-        return idx;
-      });
+      if (idx < 0 || idx >= pages.length) return;
+      suppressResetRef.current = true;
+      setCurrentIdx(idx);
       setEditingTitle(false);
     },
     [pages.length],
   );
 
-  // ── Add page ──────────────────────────────────────────────────────────────
   const addPage = useCallback(() => {
     setPages(prev => {
       if (prev.length >= MAX_PAGES) {
@@ -282,12 +305,13 @@ export default function SMJournalInputCard({
         return prev;
       }
       const next = [...prev, makePage(prev.length)];
+      suppressResetRef.current = true;
       setCurrentIdx(next.length - 1);
       return next;
     });
+    setEditingTitle(false);
   }, []);
 
-  // ── Delete page ───────────────────────────────────────────────────────────
   const deletePage = useCallback(() => {
     if (pages.length === 1) {
       Alert.alert('Cannot Delete', 'At least one page is required.');
@@ -305,6 +329,7 @@ export default function SMJournalInputCard({
             setPages(prev => {
               const next = prev.filter((_, i) => i !== currentIdx);
               const newIdx = Math.min(currentIdx, next.length - 1);
+              suppressResetRef.current = true;
               setCurrentIdx(newIdx);
               return next;
             });
@@ -338,7 +363,6 @@ export default function SMJournalInputCard({
       ? '#FFB800'
       : 'rgba(255,255,255,0.28)';
 
-  // ─────────────────────────────────────────────────────────────────────────
   return (
     <View>
       {/* ══ MOOD STRIP ═══════════════════════════════════════════════════════ */}
@@ -385,7 +409,6 @@ export default function SMJournalInputCard({
               <View style={S.spineDot} />
               {editingTitle ? (
                 <TextInput
-                  ref={titleRef}
                   value={page?.title ?? ''}
                   onChangeText={v => patchPage(currentIdx, { title: v })}
                   onBlur={() => setEditingTitle(false)}
@@ -475,7 +498,6 @@ export default function SMJournalInputCard({
                 ))}
               </ScrollView>
             )}
-
             {tab === 'color' && (
               <ScrollView
                 horizontal
@@ -495,7 +517,7 @@ export default function SMJournalInputCard({
             )}
           </View>
 
-          {/* ── RULED LINES ──────────────────────────────────────────────── */}
+          {/* ── RULED LINES ─────────────────────────────────────────────── */}
           <View style={S.ruled} pointerEvents="none">
             {Array.from({ length: 9 }).map((_, i) => (
               <View key={i} style={S.ruledLine} />
@@ -649,7 +671,6 @@ const BDR = 'rgba(124,58,237,0.28)';
 const SPINE_C = colors.primary;
 
 const S = StyleSheet.create({
-  // mood
   moodRow: {
     flexDirection: 'row',
     gap: 10,
@@ -670,7 +691,6 @@ const S = StyleSheet.create({
   moodEmoji: { fontSize: 15 },
   moodLbl: { color: 'rgba(255,255,255,0.50)', fontWeight: '800', fontSize: 11 },
 
-  // book shell
   bookShell: { position: 'relative', marginLeft: 8, marginBottom: 4 },
   depthC: {
     position: 'absolute',
@@ -721,7 +741,6 @@ const S = StyleSheet.create({
     elevation: 16,
   },
 
-  // header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -785,7 +804,6 @@ const S = StyleSheet.create({
     letterSpacing: 0.4,
   },
 
-  // tabs
   tabRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
@@ -796,7 +814,6 @@ const S = StyleSheet.create({
   tabTxt: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '700' },
   tabTxtOn: { color: '#FFFFFF', fontWeight: '900' },
 
-  // toolbar
   toolWrap: {
     minHeight: 56,
     justifyContent: 'center',
@@ -830,7 +847,6 @@ const S = StyleSheet.create({
     marginHorizontal: 3,
   },
 
-  // swatches
   swatchWrap: { alignItems: 'center', gap: 5, marginHorizontal: 2 },
   swatch: {
     width: 28,
@@ -842,7 +858,6 @@ const S = StyleSheet.create({
   swatchActive: { borderColor: '#FFFFFF', transform: [{ scale: 1.18 }] },
   swatchLbl: { fontSize: 9, fontWeight: '800', letterSpacing: 0.2 },
 
-  // ruled lines
   ruled: {
     position: 'absolute',
     top: 168,
@@ -854,7 +869,6 @@ const S = StyleSheet.create({
   },
   ruledLine: { height: 1, backgroundColor: 'rgba(124,58,237,0.07)' },
 
-  // input
   input: {
     minHeight: 180,
     paddingHorizontal: spacing.md,
@@ -863,7 +877,6 @@ const S = StyleSheet.create({
     zIndex: 1,
   },
 
-  // footer
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -894,7 +907,6 @@ const S = StyleSheet.create({
   fmtDot: { width: 8, height: 8, borderRadius: 999 },
   charCount: { fontSize: 11, fontWeight: '900', flexShrink: 0 },
 
-  // page navigator
   nav: {
     flexDirection: 'row',
     alignItems: 'center',
