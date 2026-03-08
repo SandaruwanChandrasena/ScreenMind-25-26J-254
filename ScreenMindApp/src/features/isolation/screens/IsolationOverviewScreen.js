@@ -5,7 +5,7 @@ import {
 import Icon from "react-native-vector-icons/Ionicons";
 import { RESULTS } from "../services/permissionHelper";
 
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
@@ -185,16 +185,14 @@ export default function IsolationOverviewScreen({ navigation }) {
 
     if (prefs.gps) {
       list.push({ label: "Daily distance", value: formatMeters(features.dailyDistanceMeters) });
-      list.push({ label: "Time at home",   value: `${Math.round((features.timeAtHomePct || 0) * 100)}%` });
     } else {
       list.push({ label: "Daily distance", value: "Off" });
-      list.push({ label: "Time at home",   value: "Off" });
     }
 
     if (prefs.calls || prefs.sms) {
-      list.push({ label: "Unique contacts", value: `${Math.round(features.uniqueContacts || 0)}` });
+      list.push({ label: "Connections", value: `${Math.round(features.uniqueContacts || 0)}` });
     } else {
-      list.push({ label: "Unique contacts", value: "Off" });
+      list.push({ label: "Connections", value: "Off" });
     }
 
     if (prefs.usage) {
@@ -219,18 +217,18 @@ export default function IsolationOverviewScreen({ navigation }) {
   // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <ScreenBackground>
+      <DashboardBackground>
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="large" />
           <Text style={styles.loadingText}>Loading social well-being…</Text>
         </View>
-      </ScreenBackground>
+      </DashboardBackground>
     );
   }
 
   // ─── Main render ──────────────────────────────────────────────────────────
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>📍 Social Well-being</Text>
         <Text style={styles.sub}>
@@ -322,10 +320,10 @@ export default function IsolationOverviewScreen({ navigation }) {
         <Text style={styles.sectionTitle}>Quick highlights</Text>
         <View style={styles.grid}>
           {highlights.map((x) => (
-            <View key={x.label} style={styles.statCard}>
+              <View key={x.label} style={styles.statCard}>
               <Text style={styles.statLabel}>{x.label}</Text>
               <Text style={styles.statValue}>{x.value}</Text>
-            </View>
+              </View>
           ))}
         </View>
 
@@ -349,7 +347,7 @@ export default function IsolationOverviewScreen({ navigation }) {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 
@@ -364,9 +362,9 @@ function normaliseBreakdown(bd) {
   if (!bd) return {};
   return {
     mobility:      bd.mobility      ?? bd.mobility      ?? 0,
-    comm:          bd.communication ?? bd.comm          ?? 0,
-    beh:           bd.behaviour     ?? bd.beh           ?? 0,
-    prox:          bd.proximity     ?? bd.prox          ?? 0,
+    communication: bd.communication ?? bd.comm          ?? 0,
+    behaviour:     bd.behaviour     ?? bd.beh           ?? 0,
+    proximity:     bd.proximity     ?? bd.prox          ?? 0,
   };
 }
 
@@ -398,14 +396,18 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.text, fontWeight: "900", marginTop: spacing.lg, fontSize: 16 },
 
   grid: {
-    flexDirection: "row", flexWrap: "wrap",
-    justifyContent: "space-between", marginTop: spacing.md,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: spacing.md,
   },
   statCard: {
-    width: "48%",
+    width: "31.5%",
     backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1, borderColor: colors.border,
-    borderRadius: 18, padding: spacing.md, marginBottom: spacing.md,
+    borderRadius: 18,
+    padding: spacing.md,
+    marginBottom: spacing.md,
   },
   statLabel: { color: colors.muted, fontWeight: "800", fontSize: 12 },
   statValue: { color: colors.text, fontWeight: "900", fontSize: 18, marginTop: 6 },
