@@ -47,6 +47,41 @@ class SleepEventModule(
         }
     }
 
+    @ReactMethod
+    fun sendLocalNotification(title: String, message: String) {
+        val notificationManager = reactContext
+            .getSystemService(android.content.Context.NOTIFICATION_SERVICE)
+                as android.app.NotificationManager
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val channel = android.app.NotificationChannel(
+                "sleep_warnings",
+                "Sleep Warnings",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            )
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            reactContext,
+            0,
+            reactContext.packageManager.getLaunchIntentForPackage(reactContext.packageName),
+            android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = androidx.core.app.NotificationCompat
+            .Builder(reactContext, "sleep_warnings")
+            .setContentTitle(title)
+            .setContentText(message)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(2001, notification)
+    }
+
     fun sendEvent(eventName: String, params: Map<String, Any>) {
         val map = Arguments.createMap()
         params.forEach { (k, v) ->

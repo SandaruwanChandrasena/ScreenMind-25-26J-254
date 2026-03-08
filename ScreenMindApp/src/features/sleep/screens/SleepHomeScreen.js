@@ -142,7 +142,8 @@ export default function SleepHomeScreen({ navigation }) {
   // ====== 1) Permissions check + bedtime reminder (on app load) ======
   useEffect(() => {
     checkPermissions();
-    scheduleBedtimeReminder(); // Schedule bedtime reminder on app load
+    scheduleBedtimeReminder();
+    startLateNightWarningMonitor(); // passive mode: warns if phone used during night window without a session
   }, []);
 
   const checkPermissions = async () => {
@@ -393,6 +394,7 @@ export default function SleepHomeScreen({ navigation }) {
       // ── Start real event tracking ──
       startSleepEventTracking(sessionId, userId);
       startSensorTracking(sessionId, userId);
+      startLateNightWarningMonitor(sessionId);
 
       setRunningSessionId(sessionId);
       Alert.alert("Started ✅",
@@ -416,6 +418,7 @@ export default function SleepHomeScreen({ navigation }) {
       // ── Stop event tracking ──
       stopSleepEventTracking();
       stopSensorTracking();
+      startLateNightWarningMonitor(); // downgrade back to passive mode (no session)
 
       await stopSleepSession({ sessionId });
       setRunningSessionId(null);
