@@ -19,6 +19,7 @@ import SMMiniCard from '../components/SMMiniCard';
 import { colors } from '../../../theme/colors';
 import { spacing } from '../../../theme/spacing';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { analyzeJournalText } from '../services/socialMedia.api';
 import { toFixedMaybe } from '../utils/sm.formatters';
 
@@ -41,9 +42,18 @@ export default function SMJournalScreen() {
   // ── saving state to show spinner on Save button ──
   const [saving, setSaving] = useState(false);
 
+  // ── Multi-page state — collects all pages from SMJournalInputCard ──
+  const [journalPages, setJournalPages] = useState([]);
+
   const trimmed = text.trim();
   const canAnalyze = useMemo(() => trimmed.length >= 10, [trimmed]);
-  const canSave = useMemo(() => trimmed.length >= 3, [trimmed]);
+  const canSave = useMemo(
+    () =>
+      trimmed.length >= 3 ||
+      (journalPages.length > 0 &&
+        journalPages.some(p => p.text?.trim().length >= 3)),
+    [trimmed, journalPages],
+  );
 
   // ── LOAD entries from Firebase on mount ──────────────────────
   useEffect(() => {
@@ -79,7 +89,6 @@ export default function SMJournalScreen() {
       setResult(data);
     } catch (e) {
       console.log('❌ Analyze error:', e.message);
-      // Fallback result so UI doesn't break
       setResult({
         riskLevel: 'MODERATE',
         sentimentScore: -0.62,
@@ -100,12 +109,23 @@ export default function SMJournalScreen() {
     try {
       setSaving(true);
 
+      // Build pages array — use journalPages if available, else wrap trimmed
+      const pagesToSave =
+        journalPages.length > 0
+          ? journalPages.map(p => ({
+              id: p.id,
+              title: p.title,
+              text: p.text,
+              format: p.format,
+            }))
+          : [{ id: '1', title: 'Page 1', text: trimmed, format: {} }];
+
       const entry = {
         id: Date.now().toString(),
-        text: trimmed,
+        text: trimmed, // first-page text kept for backward compat
         mood: selectedMood,
         createdAt: new Date().toISOString(),
-        // Include sentiment result if user analyzed before saving
+        pages: pagesToSave, // ← all pages saved together
         sentiment: result
           ? {
               label: result.sentimentLabel || null,
@@ -117,7 +137,16 @@ export default function SMJournalScreen() {
 
       const { success, firebaseId } = await saveJournalToFirebase(entry);
 
-      // Add firebaseId to local entry for deletion later
+      // ✅ Mark today as journal-saved — used by reminder to skip notification
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(
+        today.getMonth() + 1,
+      ).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      await AsyncStorage.setItem(
+        'sm_journal_saved_today',
+        JSON.stringify({ date: todayStr }),
+      );
+
       const savedEntry = { ...entry, firebaseId: firebaseId || entry.id };
       setEntries(prev => [savedEntry, ...prev]);
 
@@ -134,6 +163,7 @@ export default function SMJournalScreen() {
       setText('');
       setSelectedMood(null);
       setResult(null);
+      setJournalPages([]);
     } catch (e) {
       console.log('❌ Save error:', e);
       Alert.alert('Save failed', 'Please try again.');
@@ -168,6 +198,7 @@ export default function SMJournalScreen() {
     setText('');
     setSelectedMood(null);
     setResult(null);
+    setJournalPages([]); // resets all pages in the card
   };
 
   // ── Format date for display ──────────────────────────────────
@@ -193,6 +224,12 @@ export default function SMJournalScreen() {
     return '#22C55E';
   };
 
+  // ── Page count label for saved entry ────────────────────────
+  const pageLabel = entry => {
+    if (!entry.pages || entry.pages.length <= 1) return null;
+    return `${entry.pages.length} pages`;
+  };
+
   // ── RENDER ───────────────────────────────────────────────────
   return (
     <DashboardBackground>
@@ -212,11 +249,13 @@ export default function SMJournalScreen() {
           subtitle="Consent-based user input."
         />
 
+        {/* ── Journal card — now with multi-page support ── */}
         <SMJournalInputCard
           text={text}
           onChangeText={setText}
           selectedMood={selectedMood}
           onSelectMood={setSelectedMood}
+          onPagesChange={setJournalPages}
         />
 
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
@@ -261,24 +300,56 @@ export default function SMJournalScreen() {
         <SMSectionTitle title="Result" subtitle="Extracted signals." />
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
           <SMMiniCard
-            label="Risk"
+            label="Risk Level"
             value={result?.riskLevel || '—'}
-            sub="Overall"
-            tint="rgba(124,58,237,0.25)"
+            sub="Overall journal"
+            tint={
+              result?.riskLevel === 'HIGH'
+                ? 'rgba(239,68,68,0.22)'
+                : result?.riskLevel === 'MODERATE'
+                ? 'rgba(255,184,0,0.22)'
+                : result?.riskLevel === 'LOW'
+                ? 'rgba(34,197,94,0.22)'
+                : 'rgba(124,58,237,0.25)'
+            }
           />
           <SMMiniCard
             label="Sentiment"
-            value={
-              result
-                ? `${toFixedMaybe(result.sentimentScore)} (${
-                    result.sentimentLabel
-                  })`
-                : '—'
+            value={result?.sentimentLabel || '—'}
+            sub={
+              result?.sentimentScore != null
+                ? `Score: ${Math.round(result.sentimentScore * 100)}%`
+                : 'Journal'
             }
-            sub="Journal"
             tint="rgba(14,165,233,0.22)"
           />
         </View>
+
+        {/* ── Extra detail row ── */}
+        {result && (
+          <View
+            style={{
+              flexDirection: 'row',
+              gap: spacing.md,
+              marginTop: spacing.md,
+            }}
+          >
+            <SMMiniCard
+              label="Negative %"
+              value={`${Math.round(
+                result.negative ?? result.sentimentScore * 100,
+              )}%`}
+              sub="RoBERTa score"
+              tint="rgba(239,68,68,0.18)"
+            />
+            <SMMiniCard
+              label="Confidence"
+              value={`${Math.round(result.confidence || 0)}%`}
+              sub="Model confidence"
+              tint="rgba(34,197,94,0.18)"
+            />
+          </View>
+        )}
 
         {/* ── Saved entries ── */}
         <SMSectionTitle
@@ -318,9 +389,16 @@ export default function SMJournalScreen() {
                   </Pressable>
                 </View>
 
-                {/* ── Journal text ── */}
+                {/* ── Page count badge (if multi-page entry) ── */}
+                {pageLabel(e) && (
+                  <View style={styles.pageBadge}>
+                    <Text style={styles.pageBadgeTxt}>📄 {pageLabel(e)}</Text>
+                  </View>
+                )}
+
+                {/* ── Journal text (first page preview) ── */}
                 <Text style={styles.entryText} numberOfLines={3}>
-                  {e.text}
+                  {e.pages?.[0]?.text || e.text}
                 </Text>
 
                 {/* ── Sentiment badge (if analyzed before saving) ── */}
@@ -415,6 +493,19 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(239,68,68,0.22)',
   },
   deleteText: { color: '#EF4444', fontWeight: '900', fontSize: 11 },
+
+  // ── Multi-page badge ────────────────────────────────────────
+  pageBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(124,58,237,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.28)',
+  },
+  pageBadgeTxt: { color: colors.primary, fontSize: 10, fontWeight: '800' },
 
   sentimentBadge: {
     marginTop: 8,
