@@ -1,7 +1,7 @@
 import React, { useContext } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-import { View, ActivityIndicator, TouchableOpacity } from 'react-native';
+import { View, ActivityIndicator, TouchableOpacity, Text } from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 
 import { AuthContext } from '../context/AuthContext';
@@ -48,7 +48,7 @@ import MorningCheckInScreen from '../features/sleep/screens/MorningCheckInScreen
 import SleepDetailsScreen from '../features/sleep/screens/SleepDetailsScreen';
 import DataPermissionsScreen from '../features/sleep/screens/DataPermissionsScreen';
 import SnoringScreen from '../features/sleep/screens/SnoringScreen';
-import SleepScheduleScreen from '../features/sleep/screens/SleepScheduleScreen'; // ✅ from friend
+import SleepScheduleScreen from '../features/sleep/screens/SleepScheduleScreen';
 
 /* ========================= */
 /* ✅ Screen Usage (ScreenLogs) Screens */
@@ -56,8 +56,8 @@ import SleepScheduleScreen from '../features/sleep/screens/SleepScheduleScreen';
 import QuestionnaireScreen from '../features/screenUsage/screens/QuestionnaireScreen';
 import MentalHealthDashboard from '../features/screenUsage/screens/MentalHealthDashboard';
 import PredictionHistoryScreen from '../features/screenUsage/screens/PredictionHistoryScreen';
-import ScreenUsageHome from '../features/screenUsage/screens/ScreenUsageHome'; // ✅ yours
-import TestUsageScreen from '../features/screenUsage/screens/TestUsageScreen'; // ✅ yours
+import ScreenUsageHome from '../features/screenUsage/screens/ScreenUsageHome';
+import TestUsageScreen from '../features/screenUsage/screens/TestUsageScreen';
 
 import { colors } from '../theme/colors';
 
@@ -113,17 +113,31 @@ export default function AppNavigator() {
               component={DashboardScreen}
               options={({ navigation }) => ({
                 title: 'Home',
-                headerRight: () => (
+                headerRight: () => (                  // ✅ ONLY THIS BLOCK CHANGED
                   <TouchableOpacity
                     onPress={() => navigation.navigate('Profile')}
-                    style={{ marginRight: 16 }}
+                    style={{
+                      marginRight: 16,
+                      width: 38,
+                      height: 38,
+                      borderRadius: 19,
+                      backgroundColor: 'rgba(124,58,237,0.30)',
+                      borderWidth: 1.5,
+                      borderColor: 'rgba(124,58,237,0.55)',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Icon
-                      name="person-circle-outline"
-                      size={28}
-                      color={colors.text}
-                    />
+                    <Text
+                      style={{
+                        color: '#A78BFA',
+                        fontWeight: '900',
+                        fontSize: 16,
+                      }}
+                    >
+                      {(user?.displayName || 'U')[0].toUpperCase()}
+                    </Text>
                   </TouchableOpacity>
                 ),
               })}

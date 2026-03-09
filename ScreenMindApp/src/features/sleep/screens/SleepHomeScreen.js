@@ -41,10 +41,10 @@ import {
 } from "../services/sleepRepository";
 
 
-import { 
-  startLateNightWarningMonitor, 
+import {
+  startLateNightWarningMonitor,
   stopLateNightWarningMonitor,
-  scheduleBedtimeReminder 
+  scheduleBedtimeReminder
 } from '../services/sleepWarningService';
 
 const { SleepServiceModule } = NativeModules;
@@ -103,20 +103,146 @@ function Divider() {
   return <View style={styles.divider} />;
 }
 
-function RiskBadge({ risk }) {
-  const bg =
+/**
+ * Pure-RN circular donut chart. No external library.
+ * score: 0–100 (higher = worse disruption risk)
+ * risk: "Low" | "Medium" | "High"
+ */
+function DonutChart({ score, risk }) {
+  const SIZE = 150;
+  const STROKE = 14;
+  const isValid = typeof score === "number" && !isNaN(score);
+  const pct = isValid ? Math.max(0, Math.min(100, score)) : 0;
+
+  // Color based on risk
+  const arcColor =
     risk === "High"
-      ? "rgba(239,68,68,0.18)"
+      ? "#F87171"
       : risk === "Medium"
-        ? "rgba(245,158,11,0.16)"
-        : "rgba(34,197,94,0.14)";
+        ? "#FBBF24"
+        : "#34D399";
+
+  const riskEmoji =
+    risk === "High" ? "🔴" : risk === "Medium" ? "🟡" : "🟢";
+
+  // Half-circle rotation technique
+  const half = SIZE / 2;
+  const innerSize = SIZE - STROKE * 2;
+
+  // We render two halves to form the arc
+  const deg1 = Math.min(180, (pct / 100) * 360);
+  const deg2 = Math.max(0, (pct / 100) * 360 - 180);
 
   return (
-    <View style={[styles.riskBadge, { backgroundColor: bg }]}>
-      <Text style={styles.riskText}>{risk || "—"}</Text>
+    <View style={donutStyles.wrapper}>
+      {/* Donut ring */}
+      <View style={[donutStyles.ring, { width: SIZE, height: SIZE, borderRadius: SIZE / 2, backgroundColor: "rgba(255,255,255,0.06)" }]}>
+        {/* Left half clip */}
+        <View style={[donutStyles.halfClip, { left: 0 }]}>
+          <View
+            style={[
+              donutStyles.half,
+              {
+                width: half,
+                height: SIZE,
+                borderTopLeftRadius: half,
+                borderBottomLeftRadius: half,
+                backgroundColor: pct > 50 ? arcColor : "rgba(255,255,255,0.06)",
+                transform: [{ rotateY: "180deg" }, { rotateZ: `${deg2}deg` }],
+                transformOrigin: `${half}px ${half}px`,
+              },
+            ]}
+          />
+        </View>
+        {/* Right half clip */}
+        <View style={[donutStyles.halfClip, { right: 0 }]}>
+          <View
+            style={[
+              donutStyles.half,
+              {
+                width: half,
+                height: SIZE,
+                borderTopRightRadius: half,
+                borderBottomRightRadius: half,
+                backgroundColor: pct > 0 ? arcColor : "rgba(255,255,255,0.06)",
+                transform: [{ rotateZ: `${-deg1}deg` }],
+                transformOrigin: `0px ${half}px`,
+              },
+            ]}
+          />
+        </View>
+        {/* Inner circle (creates donut hole) */}
+        <View
+          style={[
+            donutStyles.inner,
+            {
+              width: innerSize,
+              height: innerSize,
+              borderRadius: innerSize / 2,
+              top: STROKE,
+              left: STROKE,
+            },
+          ]}
+        >
+          <Text style={donutStyles.scoreNum}>
+            {isValid ? pct : "—"}
+          </Text>
+          <Text style={donutStyles.scoreUnit}>/ 100</Text>
+          <Text style={donutStyles.riskLabel}>
+            {riskEmoji} {risk || "—"}
+          </Text>
+        </View>
+      </View>
+
+      {/* Legend */}
+      <View style={donutStyles.legend}>
+        <LegendDot color="#34D399" label="Low" />
+        <LegendDot color="#FBBF24" label="Med" />
+        <LegendDot color="#F87171" label="High" />
+      </View>
     </View>
   );
 }
+
+function LegendDot({ color, label }) {
+  return (
+    <View style={donutStyles.legendItem}>
+      <View style={[donutStyles.dot, { backgroundColor: color }]} />
+      <Text style={donutStyles.legendText}>{label}</Text>
+    </View>
+  );
+}
+
+const donutStyles = StyleSheet.create({
+  wrapper: { alignItems: "center", paddingVertical: 8 },
+  ring: { position: "relative", overflow: "hidden" },
+  halfClip: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: "50%",
+    overflow: "hidden",
+  },
+  half: { position: "absolute", top: 0 },
+  inner: {
+    position: "absolute",
+    backgroundColor: "#12122A",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scoreNum: {
+    color: "#E2E8F0",
+    fontSize: 26,
+    fontWeight: "900",
+    lineHeight: 30,
+  },
+  scoreUnit: { color: "rgba(148,163,184,0.7)", fontSize: 11, fontWeight: "700" },
+  riskLabel: { color: "#E2E8F0", fontSize: 11, fontWeight: "900", marginTop: 4 },
+  legend: { flexDirection: "row", gap: 12, marginTop: 10 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { color: "rgba(148,163,184,0.8)", fontSize: 11, fontWeight: "800" },
+});
 
 function msToHrsMins(ms) {
   const mins = Math.floor(ms / 60000);
@@ -474,10 +600,21 @@ export default function SleepHomeScreen({ navigation }) {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
+        {/* ── Header row ── */}
         <View style={styles.header}>
-          <Text style={styles.brand}>SLEEP</Text>
-          <Text style={styles.title}>Dashboard</Text>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.brand}>SLEEP</Text>
+              <Text style={styles.title}>Dashboard</Text>
+            </View>
+            {/* Settings gear – top-right corner */}
+            <Pressable
+              style={styles.settingsBtn}
+              onPress={() => navigation.navigate("SleepPermissions")}
+            >
+              <Text style={styles.settingsIcon}>⚙️</Text>
+            </Pressable>
+          </View>
           <Text style={styles.sub}>
             Latest sleep disruption summary from your phone data.
           </Text>
@@ -485,40 +622,34 @@ export default function SleepHomeScreen({ navigation }) {
 
         {/* Summary Card */}
         <Card>
+          {/* Header row */}
           <View style={styles.topRow}>
-            <View>
-              <Text style={styles.smallMuted}>Latest Risk</Text>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 10,
-                  marginTop: 8,
-                }}
-              >
-                <RiskBadge risk={risk} />
-                <Text style={styles.scoreText}>Score: {score}</Text>
-              </View>
-            </View>
-
+            <Text style={styles.smallMuted}>Sleep Risk Score</Text>
             {loading ? (
-              <ActivityIndicator />
+              <ActivityIndicator size="small" color={colors.primary} />
             ) : (
               <Pressable onPress={loadDashboard} style={styles.refreshBtn}>
-                <Text style={styles.refreshText}>Refresh</Text>
+                <Text style={styles.refreshText}>↻ Refresh</Text>
               </Pressable>
             )}
           </View>
 
-          <View style={{ height: spacing.md }} />
+          {/* Donut chart */}
+          <DonutChart
+            score={riskResult ? riskResult.score : null}
+            risk={risk !== "—" ? risk : null}
+          />
 
+          <View style={styles.divider} />
+
+          {/* Stats grid */}
           <View style={styles.grid}>
             <View style={styles.tile}>
-              <Text style={styles.tileLabel}>Time in bed</Text>
+              <Text style={styles.tileLabel}>⏱ Time in bed</Text>
               <Text style={styles.tileValue}>{timeInBed}</Text>
             </View>
             <View style={styles.tile}>
-              <Text style={styles.tileLabel}>Unlocks</Text>
+              <Text style={styles.tileLabel}>🔓 Unlocks</Text>
               <Text style={styles.tileValue}>{unlocks}</Text>
             </View>
           </View>
@@ -527,13 +658,13 @@ export default function SleepHomeScreen({ navigation }) {
 
           <View style={styles.grid}>
             <View style={styles.tile}>
-              <Text style={styles.tileLabel}>Notifications</Text>
+              <Text style={styles.tileLabel}>🔔 Notifications</Text>
               <Text style={styles.tileValue}>{notifs}</Text>
             </View>
             <View style={styles.tile}>
-              <Text style={styles.tileLabel}>Session</Text>
-              <Text style={styles.tileValue}>
-                {isRunning ? "Running" : "Stopped"}
+              <Text style={styles.tileLabel}>📱 Session</Text>
+              <Text style={[styles.tileValue, { color: isRunning ? "#34D399" : colors.muted }]}>
+                {isRunning ? "● Running" : "Stopped"}
               </Text>
             </View>
           </View>
@@ -563,78 +694,64 @@ export default function SleepHomeScreen({ navigation }) {
           </View>
         )}
 
-        <View style={{ height: spacing.md }} />
+        {/* Bottom padding so content clears the tab bar */}
+        <View style={{ height: 110 }} />
+      </ScrollView>
 
-        {/* Stats card */}
-        <Card>
-          <Text style={styles.cardTitle}>Sleep Stats</Text>
-          <Text style={styles.cardHint}>
-            From SQLite logs (real data pipeline)
-          </Text>
-
-          <View style={{ height: 14 }} />
-          <StatRow label="Time in bed" value={timeInBed} />
-          <Divider />
-          <StatRow label="Unlock count" value={unlocks} />
-          <Divider />
-          <StatRow label="Notification count" value={notifs} />
-        </Card>
-
-        <View style={{ height: spacing.md }} />
-
-        {/* Actions */}
-        <PrimaryButton
-          title={isRunning ? "Stop Sleep Session" : "Start Sleep Session"}
-          onPress={isRunning ? onStopSession : onStartSession}
-          style={{
-            backgroundColor: isRunning ? colors.danger : colors.primary,
-          }}
-        />
-
-        <View style={{ height: spacing.sm }} />
-
-        <PrimaryButton
-          title="Morning Check-In"
+      {/* Fixed bottom tab bar – 4 actions + floating center Start Sleep */}
+      <View style={styles.tabBar}>
+        {/* Left: Morning Check-In */}
+        <Pressable
+          style={styles.tabItem}
           onPress={() => navigation.navigate("SleepCheckIn")}
-          style={{ backgroundColor: colors.primary2 }}
-        />
+        >
+          <Text style={styles.tabIcon}>☀️</Text>
+          <Text style={styles.tabLabel}>Check-In</Text>
+        </Pressable>
 
-        <View style={{ height: spacing.sm }} />
-
-        <PrimaryButton
-          title="View Details"
+        {/* Left: Sleep Details */}
+        <Pressable
+          style={styles.tabItem}
           onPress={() =>
             navigation.navigate("SleepDetails", { sessionId: runningSessionId })
           }
-          style={{ backgroundColor: "rgba(255,255,255,0.10)" }}
-        />
+        >
+          <Text style={styles.tabIcon}>�</Text>
+          <Text style={styles.tabLabel}>Details</Text>
+        </Pressable>
 
-        <View style={{ height: spacing.sm }} />
+        {/* Center empty slot — floating button sits above */}
+        <View style={styles.tabCenter} />
 
-        <PrimaryButton
-          title="Snoring Analysis"
+        {/* Right: Snoring */}
+        <Pressable
+          style={styles.tabItem}
           onPress={() => navigation.navigate("SleepSnoring")}
-          style={{ backgroundColor: "rgba(255,255,255,0.10)" }}
-        />
+        >
+          <Text style={styles.tabIcon}>🎙️</Text>
+          <Text style={styles.tabLabel}>Snoring</Text>
+        </Pressable>
 
-        <View style={{ height: spacing.sm }} />
-
-        <PrimaryButton
-          title="Data & Permissions"
-          onPress={() => navigation.navigate("SleepPermissions")}
-          style={{ backgroundColor: "rgba(255,255,255,0.10)" }}
-        />
-
-        <View style={{ height: spacing.sm }} />
-
-        <PrimaryButton
-          title="⚙️ Sleep Schedule"
+        {/* Right: Schedule */}
+        <Pressable
+          style={styles.tabItem}
           onPress={() => navigation.navigate("SleepSchedule")}
-          style={{ backgroundColor: "rgba(255,255,255,0.10)" }}
-        />
+        >
+          <Text style={styles.tabIcon}>�️</Text>
+          <Text style={styles.tabLabel}>Schedule</Text>
+        </Pressable>
+      </View>
 
-        <View style={{ height: spacing.xxl }} />
-      </ScrollView>
+      {/* Floating Start/Stop button – centered above the tab bar */}
+      <Pressable
+        style={[styles.floatBtn, isRunning && styles.floatBtnStop]}
+        onPress={isRunning ? onStopSession : onStartSession}
+      >
+        <Text style={styles.floatBtnIcon}>{isRunning ? "⏹" : "🌙"}</Text>
+        <Text style={styles.floatBtnLabel}>
+          {isRunning ? "Stop\nSleep" : "Start\nSleep"}
+        </Text>
+      </Pressable>
     </DashboardBackground>
   );
 }
@@ -642,10 +759,31 @@ export default function SleepHomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingTop: spacing.xxl, flexGrow: 1 },
 
+  // Header
   header: { marginBottom: spacing.lg },
-  brand: { color: colors.muted, fontWeight: "900", letterSpacing: 3, marginBottom: 6 },
+  headerTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 6,
+  },
+  brand: { color: colors.muted, fontWeight: "900", letterSpacing: 3, marginBottom: 4 },
   title: { color: colors.text, fontSize: 28, fontWeight: "900" },
-  sub: { color: colors.muted, marginTop: 6, lineHeight: 18 },
+  sub: { color: colors.muted, marginTop: 4, lineHeight: 18 },
+
+  // Settings gear button (top-right)
+  settingsBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  settingsIcon: { fontSize: 20 },
 
   card: {
     backgroundColor: colors.card,
@@ -714,4 +852,104 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { color: colors.text, fontWeight: "900", fontSize: 14 },
   emptyText: { color: colors.muted, marginTop: 6, lineHeight: 18, fontSize: 12 },
+
+  // ── 2×2 action grid ──
+  actionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  actionTile: {
+    width: "47%",
+    paddingVertical: 20,
+    paddingHorizontal: 14,
+    borderRadius: 24,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    gap: 8,
+  },
+  actionEmoji: { fontSize: 28 },
+  actionLabel: {
+    color: colors.text,
+    fontWeight: "900",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+
+  // ══════════════════════════════════
+  // Fixed bottom tab bar
+  // ══════════════════════════════════
+  tabBar: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0D0D2B",
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingBottom: 8,
+    paddingHorizontal: 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 6,
+  },
+  tabCenter: {
+    // empty space where the floating button sits
+    width: 88,
+  },
+  tabIcon: { fontSize: 22 },
+  tabLabel: {
+    color: "rgba(148,163,184,0.7)",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+
+  // Floating center Start/Stop button
+  floatBtn: {
+    position: "absolute",
+    bottom: 22,
+    alignSelf: "center",
+    // center horizontally
+    left: "50%",
+    marginLeft: -52,
+    width: 104,
+    height: 86,
+    borderRadius: 26,
+    backgroundColor: "#3B82F6",
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "column",
+    gap: 4,
+    // Blue glow exactly like image
+    shadowColor: "#60A5FA",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1,
+    shadowRadius: 24,
+    elevation: 20,
+    borderWidth: 2,
+    borderColor: "rgba(147,197,253,0.40)",
+  },
+  floatBtnStop: {
+    backgroundColor: "#EF4444",
+    shadowColor: "#F87171",
+    borderColor: "rgba(252,165,165,0.40)",
+  },
+  floatBtnIcon: { fontSize: 26 },
+  floatBtnLabel: {
+    color: "#fff",
+    fontWeight: "900",
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 17,
+  },
 });

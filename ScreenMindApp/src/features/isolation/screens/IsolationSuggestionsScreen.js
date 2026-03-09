@@ -53,11 +53,24 @@ function getIcon(title) {
   return "checkmark-circle-outline";
 }
 
+function overallRiskTextAndColor(label, score) {
+  const raw = String(label || "").trim().toLowerCase();
+
+  if (raw === "high" || (score !== null && score >= 67)) {
+    return { text: "High Risk", color: "#f87171" };
+  }
+  if (raw === "medium" || raw === "moderate" || (score !== null && score >= 34)) {
+    return { text: "Moderate Risk", color: "#fbbf24" };
+  }
+  return { text: "Low Risk", color: "#4ade80" };
+}
+
 export default function IsolationSuggestionsScreen({ navigation }) {
   const [suggestions, setSuggestions] = useState(null);
   const [riskLabel,   setRiskLabel]   = useState("");
   const [riskScore,   setRiskScore]   = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const scoreRisk = overallRiskTextAndColor(riskLabel, riskScore);
 
   useEffect(() => {
     (async () => {
@@ -86,9 +99,6 @@ export default function IsolationSuggestionsScreen({ navigation }) {
     <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Suggestions</Text>
-        <Text style={styles.sub}>
-          Personalised steps based on your detected patterns.
-        </Text>
 
         {loading ? (
           <View style={styles.centered}>
@@ -96,24 +106,14 @@ export default function IsolationSuggestionsScreen({ navigation }) {
           </View>
         ) : (
           <>
-            {/* Context badge */}
+            {/* Score badge */}
             {riskScore !== null && (
-              <View
-                style={[
-                  styles.contextBadge,
-                  riskScore >= 67 && styles.badgeHigh,
-                  riskScore >= 34 && riskScore < 67 && styles.badgeMedium,
-                  riskScore < 34 && styles.badgeLow,
-                ]}
-              >
-                <Text style={styles.contextText}>
-                  {riskLabel} isolation risk ({riskScore}/100) — {
-                    riskScore >= 67
-                      ? "Acting on these now will make a real difference."
-                      : riskScore >= 34
-                      ? "Small changes can keep your risk low."
-                      : "You're doing well — keep it up!"
-                  }
+              <View style={styles.scoreBadge}>
+                <Text style={styles.scoreBadgeText}>
+                  Current score: {riskScore}/100 - {" "}
+                  <Text style={[styles.scoreBadgeRiskText, { color: scoreRisk.color }]}>
+                    {scoreRisk.text}
+                  </Text>
                 </Text>
               </View>
             )}
@@ -147,11 +147,6 @@ export default function IsolationSuggestionsScreen({ navigation }) {
               <Text style={styles.linkText}>Why am I seeing these?</Text>
               <Icon name="chevron-forward" size={16} color={colors.text} />
             </Pressable>
-
-            <Text style={styles.disclaimer}>
-              These suggestions are based on behavioural patterns only and are not a
-              substitute for professional mental health advice.
-            </Text>
           </>
         )}
 
@@ -164,19 +159,20 @@ export default function IsolationSuggestionsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingTop: spacing.xl, flexGrow: 1 },
   title:     { color: colors.text, fontSize: 24, fontWeight: "900" },
-  sub:       { color: colors.muted, marginTop: 8, lineHeight: 18 },
   centered:  { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
 
-  contextBadge: {
+  scoreBadge: {
     marginTop: spacing.lg,
-    padding: 12,
-    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "rgba(124,58,237,0.18)",
     borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.32)",
+    alignSelf: "flex-start",
   },
-  badgeHigh:   { backgroundColor: "rgba(239,68,68,0.12)",  borderColor: "rgba(239,68,68,0.3)" },
-  badgeMedium: { backgroundColor: "rgba(245,158,11,0.12)", borderColor: "rgba(245,158,11,0.3)" },
-  badgeLow:    { backgroundColor: "rgba(34,197,94,0.12)",  borderColor: "rgba(34,197,94,0.3)" },
-  contextText: { color: colors.text, fontWeight: "800", fontSize: 13, lineHeight: 18 },
+  scoreBadgeText: { color: colors.text, fontWeight: "900", fontSize: 13 },
+  scoreBadgeRiskText: { fontWeight: "900" },
 
   item:      { paddingVertical: 12 },
   borderTop: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4 },
@@ -200,5 +196,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   linkText:    { color: colors.text, fontWeight: "900" },
-  disclaimer:  { color: colors.faint, marginTop: spacing.lg, fontSize: 11, lineHeight: 16 },
 });

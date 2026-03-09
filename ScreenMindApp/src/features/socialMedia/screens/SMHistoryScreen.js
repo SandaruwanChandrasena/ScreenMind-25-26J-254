@@ -15,6 +15,23 @@ import { spacing } from '../../../theme/spacing';
 import { fetchDailySummary, fetchDayMessages } from '../services/smFirebase.service';
 
 // ─────────────────────────────────────────────
+// ✅ CALL NOTIFICATION FILTER
+//
+// Some call notifications were saved to Firebase before the
+// headlessTask filter was added. This regex removes them from
+// the history view so they don't pollute the message list.
+//
+// Identical logic to headlessTask.js CALL_PATTERN — anchored
+// (^ $) so real messages like "call me later" are never caught.
+// ─────────────────────────────────────────────
+const CALL_PATTERN =
+  /^(?:(?:incoming|outgoing|missed|ongoing|group)\s+(?:whatsapp\s+)?(?:voice\s+|video\s+)?calls?|whatsapp\s+(?:voice\s+|video\s+|group\s+)?call|(?:voice|video|group)\s+call|\d+\s+missed\s+(?:whatsapp\s+)?calls?|calling[.\u2026]+|ringing[.\u2026]+|on\s+a\s+call|call\s+(?:connected|ended|declined|cancelled|busy|in\s+progress)|tap\s+to\s+return\s+to\s+call|return\s+to\s+call)$/i;
+
+function isCallNotification(text) {
+  return CALL_PATTERN.test((text || '').trim());
+}
+
+// ─────────────────────────────────────────────
 // ✅ App name map
 // ─────────────────────────────────────────────
 const APP_NAMES = {
@@ -201,7 +218,13 @@ export default function SMHistoryScreen() {
     setMessages([]);
 
     const msgs = await fetchDayMessages(day.dateStr);
-    setMessages(msgs);
+
+    // ── Filter out call notifications that were saved before
+    //    the headlessTask call filter was added. Calls have no
+    //    message content and corrupt the displayed list.
+    const filtered = msgs.filter(m => !isCallNotification(m.text));
+
+    setMessages(filtered);
     setLoadingMsgs(false);
   }, [selectedDay]);
 
@@ -233,7 +256,7 @@ export default function SMHistoryScreen() {
     );
   };
 
-  // ── Count per label ──────────────────────────────────────────
+  // ── Count per label (from call-filtered messages) ────────────
   const negCount = messages.filter(m => m.label === 'Negative').length;
   const posCount = messages.filter(m => m.label === 'Positive').length;
   const neuCount = messages.filter(m => m.label === 'Neutral').length;
@@ -416,9 +439,9 @@ const styles = StyleSheet.create({
 
   // ── Loading / empty ──
   loadingBox: {
-    alignItems:    'center',
+    alignItems:      'center',
     paddingVertical: spacing.lg,
-    gap:           8,
+    gap:             8,
   },
   loadingText: { color: colors.faint, fontSize: 12 },
   emptyBox: {
@@ -461,9 +484,9 @@ const msgStyles = StyleSheet.create({
   },
 
   text: {
-    color:      colors.muted,
-    fontSize:   13,
-    lineHeight: 18,
+    color:        colors.muted,
+    fontSize:     13,
+    lineHeight:   18,
     marginBottom: 8,
   },
 

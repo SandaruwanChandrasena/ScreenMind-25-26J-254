@@ -21,7 +21,6 @@ import { spacing } from "../../../theme/spacing";
 import GlassCard from "../components/GlassCard";
 import SegmentedControl from "../components/SegmentedControl";
 import MiniBarChart from "../components/MiniBarChart";
-import YearInPixels from "../components/YearInPixels";
 
 import { getDailyIsolationHistory } from "../services/isolationStorage";
 
@@ -32,53 +31,48 @@ function avg(arr) {
   return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
 }
 
-function scoreToPixelLevel(score) {
-  const s = Number(score || 0);
-  if (s < 20) return 0;
-  if (s < 40) return 1;
-  if (s < 60) return 2;
-  if (s < 80) return 3;
-  return 4;
+function clampPct(value) {
+  const num = Number(value || 0);
+  return Math.max(0, Math.min(100, Math.round(num)));
 }
 
-function pixelColor(level) {
-  switch (level) {
-    case 0: return "rgba(34,197,94,0.35)";
-    case 1: return "rgba(34,197,94,0.18)";
-    case 2: return "rgba(245,158,11,0.22)";
-    case 3: return "rgba(239,68,68,0.25)";
-    case 4: return "rgba(239,68,68,0.38)";
-    default: return "rgba(148,163,184,0.18)";
-  }
+function toPillarRiskPct(scoreOutOf25) {
+  return clampPct((Number(scoreOutOf25 || 0) / 25) * 100);
+}
+
+function buildRealSocialWithdrawFromBreakdown(breakdown) {
+  const pillarScores = {
+    mobility: Number(breakdown?.mobility ?? 0),
+    communication: Number(breakdown?.communication ?? breakdown?.comm ?? 0),
+    behaviour: Number(breakdown?.behaviour ?? breakdown?.beh ?? 0),
+    proximity: Number(breakdown?.proximity ?? breakdown?.prox ?? 0),
+  };
+
+  const riskItems = [
+    { label: "Mobility Risk (Low Movement)", pct: toPillarRiskPct(pillarScores.mobility) },
+    { label: "Communication Risk (Low Interaction)", pct: toPillarRiskPct(pillarScores.communication) },
+    { label: "Behaviour Risk (Night Usage)", pct: toPillarRiskPct(pillarScores.behaviour) },
+    { label: "Proximity Risk (Low Exposure)", pct: toPillarRiskPct(pillarScores.proximity) },
+  ];
+
+  const socialItems = [
+    { label: "Healthy Mobility", pct: 100 - riskItems[0].pct },
+    { label: "Social Communication", pct: 100 - riskItems[1].pct },
+    { label: "Healthy Behaviour", pct: 100 - riskItems[2].pct },
+    { label: "Healthy Proximity", pct: 100 - riskItems[3].pct },
+  ]
+    .sort((a, b) => b.pct - a.pct);
+
+  const withdrawItems = riskItems
+    .filter((item) => item.pct > 0)
+    .sort((a, b) => b.pct - a.pct);
+
+  return { socialItems, withdrawItems };
 }
 
 // Fallback demo data (when no real history exists yet)
 const DEMO_WEEK  = [42, 45, 48, 58, 62, 59, 60];
 const DEMO_MONTH = Array.from({ length: 30 }, (_, i) => 35 + Math.round(25 * Math.abs(Math.sin(i / 6))));
-const DEMO_YEAR  = Array.from({ length: 365 }, (_, i) => {
-  const wave = Math.sin(i / 18) + Math.sin(i / 7) * 0.4;
-  const v = (wave + 1.4) / 2.8;
-  if (v < 0.2) return 0;
-  if (v < 0.4) return 1;
-  if (v < 0.6) return 2;
-  if (v < 0.8) return 3;
-  return 4;
-});
-
-const DEMO_SOCIAL = [
-  { label: "movement / walking", pct: 82 },
-  { label: "phone calls",        pct: 78 },
-  { label: "location variety",   pct: 65 },
-  { label: "messaging",          pct: 60 },
-];
-
-const DEMO_WITHDRAW = [
-  { label: "high time at home",    pct: 68 },
-  { label: "few unique contacts",  pct: 55 },
-  { label: "night phone usage",    pct: 48 },
-  { label: "low mobility",         pct: 40 },
-  { label: "frequent checking",    pct: 32 },
-];
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -101,18 +95,16 @@ export default function IsolationStatsScreen({ navigation }) {
 
     const weekRisk  = scores.slice(-7);
     const monthRisk = scores.slice(-30);
-    const yearPixels = scores.slice(-365).map(scoreToPixelLevel);
 
-    // ── Social / Withdraw from most recent record ───────────────────────────
-    // computeIsolationRisk now saves socialItems[] + withdrawItems[] in the record
+    // ── Social / Withdraw from most recent real breakdown ───────────────────
     const latest = history[0]; // newest-first
-    const socialItems   = latest?.socialItems?.length   ? latest.socialItems   : DEMO_SOCIAL;
-    const withdrawItems = latest?.withdrawItems?.length ? latest.withdrawItems : DEMO_WITHDRAW;
+    const { socialItems, withdrawItems } = latest?.breakdown
+      ? buildRealSocialWithdrawFromBreakdown(latest.breakdown)
+      : { socialItems: [], withdrawItems: [] };
 
     return {
       weekRisk:    weekRisk.length  ? weekRisk  : DEMO_WEEK,
       monthRisk:   monthRisk.length ? monthRisk : DEMO_MONTH,
-      yearPixels:  yearPixels.length ? yearPixels : DEMO_YEAR,
       socialItems,
       withdrawItems,
       isDemo: history.length === 0,
@@ -160,8 +152,16 @@ export default function IsolationStatsScreen({ navigation }) {
           <MiniBarChart values={chartData} />
 
           <View style={styles.captionRow}>
-            <Text style={styles.caption}>Lower is better</Text>
-            <Text style={styles.captionStrong}>{avg(chartData)}/100</Text>
+            {!ui.isDemo && (
+              <Text style={styles.smallMetaInline}>
+                Records loaded: {history.length}
+              </Text>
+            )}
+
+            <View style={styles.captionRight}>
+              <Text style={styles.captionStrong}>{avg(chartData)}/100</Text>
+              <Text style={styles.captionPositive}>Lower is better</Text>
+            </View>
           </View>
 
           <View style={{ height: spacing.md }} />
@@ -174,11 +174,15 @@ export default function IsolationStatsScreen({ navigation }) {
             <Icon name="chevron-forward" size={16} color={colors.text} />
           </Pressable>
 
-          {!ui.isDemo && (
-            <Text style={styles.smallMeta}>
-              Records loaded: {history.length}
-            </Text>
-          )}
+          <View style={{ height: spacing.sm }} />
+
+          <Pressable
+            onPress={() => navigation.navigate("IsolationSuggestions")}
+            style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.linkText}>See Suggestions</Text>
+            <Icon name="chevron-forward" size={16} color={colors.text} />
+          </Pressable>
         </GlassCard>
 
         {/* Card 2 — Social / Withdraw */}
@@ -267,37 +271,7 @@ export default function IsolationStatsScreen({ navigation }) {
           </View>
         </GlassCard>
 
-        {/* Card 3 — Year in pixels */}
-        <GlassCard
-          icon="grid-outline"
-          title="Year in pixels"
-          subtitle="Isolation risk throughout the year"
-          style={{ marginTop: spacing.md }}
-        >
-          <View style={styles.legendRow}>
-            {["Low", "Mild", "Normal", "High", "Severe"].map((label, idx) => (
-              <View key={label} style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: pixelColor(idx) }]} />
-                <Text style={styles.legendText}>{label}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={{ height: spacing.md }} />
-          <YearInPixels values={ui.yearPixels} />
-
-          <View style={{ height: spacing.md }} />
-
-          <Pressable
-            onPress={() => navigation.navigate("IsolationSuggestions")}
-            style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.linkText}>See Suggestions</Text>
-            <Icon name="chevron-forward" size={16} color={colors.text} />
-          </Pressable>
-
-          <View style={{ height: spacing.sm }} />
-
+        <View style={{ marginTop: spacing.md }}>
           <Pressable
             onPress={() => navigation.navigate("IsolationPrivacy")}
             style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
@@ -305,7 +279,7 @@ export default function IsolationStatsScreen({ navigation }) {
             <Text style={styles.linkText}>Privacy & Data Controls</Text>
             <Icon name="chevron-forward" size={16} color={colors.text} />
           </Pressable>
-        </GlassCard>
+        </View>
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -354,9 +328,10 @@ const styles = StyleSheet.create({
     padding: 10, borderRadius: 10,
   },
 
-  captionRow:     { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
-  caption:        { color: colors.faint, fontSize: 12, fontWeight: "800" },
+  captionRow:     { marginTop: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  captionRight:   { alignItems: "flex-end" },
   captionStrong:  { color: colors.text, fontSize: 12, fontWeight: "900" },
+  captionPositive:{ color: "#4ade80", fontSize: 12, fontWeight: "800", marginTop: 4 },
 
   linkBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -365,7 +340,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   linkText:    { color: colors.text, fontWeight: "900" },
-  smallMeta:   { color: colors.muted, fontWeight: "800", fontSize: 12, marginTop: 10 },
+  smallMetaInline: { color: colors.muted, fontWeight: "800", fontSize: 12, marginTop: 1 },
   emptyText:   { color: colors.faint, fontSize: 13, marginVertical: 10 },
 
   jdWrap: {
@@ -408,9 +383,4 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 10,
   },
   smallNavText: { color: colors.text, fontWeight: "900" },
-
-  legendRow:  { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  legendItem: { flexDirection: "row", alignItems: "center", gap: 8 },
-  legendDot:  { width: 10, height: 10, borderRadius: 3 },
-  legendText: { color: colors.muted, fontWeight: "900", fontSize: 12 },
 });

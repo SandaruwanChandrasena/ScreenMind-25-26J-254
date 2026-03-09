@@ -204,16 +204,6 @@ export default function IsolationOverviewScreen({ navigation }) {
     return list.slice(0, 4);
   }, [features, prefs]);
 
-  // Build summary sentence
-  const summary = useMemo(() => {
-    if (!risk.reasons?.length) {
-      return "Your recent patterns look balanced. Keep maintaining healthy social exposure.";
-    }
-    const top = risk.reasons.filter((r) => r.risk > 0.3).slice(0, 2);
-    if (!top.length) return "No significant risk factors detected this week. Keep it up!";
-    return top.map((r) => r.title).join(" + ") + " detected over the last 7 days.";
-  }, [risk]);
-
   // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -231,21 +221,6 @@ export default function IsolationOverviewScreen({ navigation }) {
     <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>📍 Social Well-being</Text>
-        <Text style={styles.sub}>
-          Loneliness risk based on mobility + communication + behaviour.
-        </Text>
-
-        {/* Backend/local indicator badge */}
-        <View style={[styles.sourceBadge, { backgroundColor: usingBackend ? "rgba(46,204,113,0.15)" : "rgba(243,156,18,0.15)" }]}>
-          <Icon
-            name={usingBackend ? "cloud-done-outline" : "phone-portrait-outline"}
-            size={13}
-            color={usingBackend ? "#2ecc71" : "#f39c12"}
-          />
-          <Text style={[styles.sourceBadgeText, { color: usingBackend ? "#2ecc71" : "#f39c12" }]}>
-            {usingBackend ? "AI model (backend)" : "Local estimate"}
-          </Text>
-        </View>
 
         {/* Error card */}
         {!!errorMsg && (
@@ -292,8 +267,23 @@ export default function IsolationOverviewScreen({ navigation }) {
         >
           <GaugeRing score={risk.score} label={risk.label} size={200} />
 
-          <View style={{ height: spacing.md }} />
-          <Text style={styles.body}>{summary}</Text>
+          <View style={styles.riskLegendRow}>
+            <View style={styles.riskLegendItem}>
+              <View style={[styles.riskLegendDot, styles.riskLegendDotHigh]} />
+              <Text style={[styles.riskLegendText, styles.riskLegendTextHigh]}>High Risk</Text>
+            </View>
+
+            <View style={styles.riskLegendItem}>
+              <View style={[styles.riskLegendDot, styles.riskLegendDotModerate]} />
+              <Text style={[styles.riskLegendText, styles.riskLegendTextModerate]}>Moderate Risk</Text>
+            </View>
+
+            <View style={styles.riskLegendItem}>
+              <View style={[styles.riskLegendDot, styles.riskLegendDotLow]} />
+              <Text style={[styles.riskLegendText, styles.riskLegendTextLow]}>Low Risk</Text>
+            </View>
+          </View>
+
           <View style={{ height: spacing.md }} />
 
           <Pressable style={styles.bigBtn} onPress={() => navigation.navigate("IsolationStats")}>
@@ -332,15 +322,34 @@ export default function IsolationOverviewScreen({ navigation }) {
           <>
             <Text style={styles.sectionTitle}>Score breakdown</Text>
             <View style={styles.breakdownRow}>
-              {risk.used.map((pillar) => (
-                <View key={pillar} style={styles.breakdownPill}>
-                  <Text style={styles.breakdownPillLabel}>{pillar}</Text>
-                  <Text style={styles.breakdownPillValue}>
-                    {risk.breakdown?.[pillar] ?? 0}/
-                    {Math.round(100 / (risk.used.length || 1))}
-                  </Text>
-                </View>
-              ))}
+              {risk.used.map((pillar) => {
+                const rawValue = risk.breakdown?.[pillar] ?? 0;
+                const maxPerPillar = Math.max(1, Math.round(100 / (risk.used.length || 1)));
+                const level = scoreLevel(rawValue, maxPerPillar);
+                return (
+                  <View
+                    key={pillar}
+                    style={[
+                      styles.breakdownPill,
+                      level === "High" && styles.breakdownPillHigh,
+                      level === "Medium" && styles.breakdownPillMedium,
+                      level === "Low" && styles.breakdownPillLow,
+                    ]}
+                  >
+                    <Text style={styles.breakdownPillLabel}>{pillarRiskLabel(pillar)}</Text>
+                    <Text
+                      style={[
+                        styles.breakdownPillValue,
+                        level === "High" && styles.breakdownPillValueHigh,
+                        level === "Medium" && styles.breakdownPillValueMedium,
+                        level === "Low" && styles.breakdownPillValueLow,
+                      ]}
+                    >
+                      {level === "Medium" ? "Moderate" : level}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </>
         )}
@@ -368,6 +377,21 @@ function normaliseBreakdown(bd) {
   };
 }
 
+function pillarRiskLabel(pillar) {
+  if (pillar === "mobility") return "Mobility Risk";
+  if (pillar === "communication") return "Communication Risk";
+  if (pillar === "behaviour") return "Behaviour Risk";
+  if (pillar === "proximity") return "Proximity Risk";
+  return `${pillar} Risk`;
+}
+
+function scoreLevel(value, max) {
+  const ratio = max > 0 ? Number(value || 0) / max : 0;
+  if (ratio >= 0.67) return "High";
+  if (ratio >= 0.34) return "Medium";
+  return "Low";
+}
+
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -393,6 +417,37 @@ const styles = StyleSheet.create({
   },
   bigBtnText: { color: colors.text, fontWeight: "900" },
 
+  riskLegendRow: {
+    marginTop: 2,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+  },
+  riskLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  riskLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+    marginRight: 6,
+  },
+  riskLegendDotHigh: { backgroundColor: "#fb7185" },
+  riskLegendDotModerate: { backgroundColor: "#fbbf24" },
+  riskLegendDotLow: { backgroundColor: "#4ade80" },
+  riskLegendText: { fontSize: 11, fontWeight: "800" },
+  riskLegendTextHigh: { color: "#fca5a5" },
+  riskLegendTextModerate: { color: "#fde68a" },
+  riskLegendTextLow: { color: "#86efac" },
+
   sectionTitle: { color: colors.text, fontWeight: "900", marginTop: spacing.lg, fontSize: 16 },
 
   grid: {
@@ -412,16 +467,41 @@ const styles = StyleSheet.create({
   statLabel: { color: colors.muted, fontWeight: "800", fontSize: 12 },
   statValue: { color: colors.text, fontWeight: "900", fontSize: 18, marginTop: 6 },
 
-  breakdownRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: spacing.sm },
+  breakdownRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    marginTop: spacing.sm,
+  },
   breakdownPill: {
-    flexDirection: "row", gap: 6, alignItems: "center",
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderRadius: 999,
+    width: "48%",
+    minHeight: 72,
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    borderRadius: 14,
     backgroundColor: "rgba(124,58,237,0.15)",
-    borderWidth: 1, borderColor: "rgba(124,58,237,0.3)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.3)",
+  },
+  breakdownPillHigh: {
+    backgroundColor: "rgba(239,68,68,0.16)",
+    borderColor: "rgba(239,68,68,0.5)",
+  },
+  breakdownPillMedium: {
+    backgroundColor: "rgba(250,204,21,0.18)",
+    borderColor: "rgba(250,204,21,0.55)",
+  },
+  breakdownPillLow: {
+    backgroundColor: "rgba(34,197,94,0.16)",
+    borderColor: "rgba(34,197,94,0.5)",
   },
   breakdownPillLabel: { color: colors.muted, fontWeight: "800", fontSize: 12 },
-  breakdownPillValue: { color: colors.text, fontWeight: "900", fontSize: 12 },
+  breakdownPillValue: { color: colors.text, fontWeight: "900", fontSize: 14 },
+  breakdownPillValueHigh: { color: "#fca5a5" },
+  breakdownPillValueMedium: { color: "#fde047" },
+  breakdownPillValueLow: { color: "#86efac" },
 
   loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg },
   loadingText: { marginTop: spacing.md, color: colors.muted, fontWeight: "700" },

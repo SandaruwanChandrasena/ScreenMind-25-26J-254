@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://192.168.8.131:8000/api/v1';
+
+
+const API_BASE_URL = 'http://192.168.8.131:8000/api/v1/isolation';
 
 // ── Main function ──────────────────────────────────────────────────────────
 
@@ -24,23 +26,22 @@ export async function fetchIsolationRisk(userId, dailyRecords) {
   const mappedRecords = dailyRecords.map(mapFeaturesToSchema);
 
   const response = await fetch(url, {
-    method: 'POST',
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      user_id: userId,
+    body:    JSON.stringify({
+      user_id:       userId,
       daily_records: mappedRecords,
     }),
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(
-      `Isolation API error ${response.status}: ${JSON.stringify(err)}`,
-    );
+    throw new Error(`Isolation API error ${response.status}: ${JSON.stringify(err)}`);
   }
 
   return response.json();
 }
+
 
 // ── Feature name mapper ────────────────────────────────────────────────────
 // Your isolationCollector.js uses camelCase.
@@ -49,39 +50,43 @@ export async function fetchIsolationRisk(userId, dailyRecords) {
 function mapFeaturesToSchema(features) {
   return {
     // Pillar 1 - Mobility
-    daily_distance_m:      features.dailyDistanceMeters    ?? 0,
-    time_at_home_pct:      features.timeAtHomePct          ?? 0,
-    location_entropy:      features.locationEntropy        ?? 0,
-    transitions:           features.transitions            ?? 0,
+    daily_distance_m:      features.dailyDistanceMeters     ?? 0,
+    time_at_home_pct:      toFraction(features.timeAtHomePct),
+    location_entropy:      features.locationEntropy         ?? 0,
+    transitions:           features.transitions             ?? 0,
     radius_of_gyration_km: (features.radiusOfGyration ?? 0) / 1000, // metres → km
 
     // Pillar 2 - Communication
-    calls_per_day:         features.callsPerDay            ?? 0,
-    avg_call_duration_s:   features.avgCallDurationSeconds ?? 0,
-    unique_contacts:       features.uniqueContacts         ?? 0,
-    sms_per_day:           features.smsPerDay              ?? 0,
-    silence_hours:         features.silenceHours           ?? 0,
+    calls_per_day:         features.callsPerDay             ?? 0,
+    avg_call_duration_s:   features.avgCallDurationSeconds  ?? 0,
+    unique_contacts:       features.uniqueContacts          ?? 0,
+    sms_per_day:           features.smsPerDay               ?? 0,
+    silence_hours:         features.silenceHours            ?? 0,
 
     // Pillar 3 - Behaviour
-    night_usage_min:       features.nightUsageMinutes      ?? 0,
-    unlocks_per_day:       features.unlocks                ?? 0,
-    total_screen_min:      features.totalScreenTimeMinutes ?? 0,
-    social_app_min:        features.socialMinutes          ?? 0,
-    social_pct:            features.socialPct              ?? 0,
-    rhythm_irregularity:   features.rhythmIrregularity     ?? 0,
+    night_usage_min:       features.nightUsageMinutes       ?? 0,
+    unlocks_per_day:       features.unlocks                 ?? 0,
+    total_screen_min:      features.totalScreenTimeMinutes  ?? 0,
+    social_app_min:        features.socialMinutes           ?? 0,
+    social_pct:            toFraction(features.socialPct),
+    rhythm_irregularity:   features.rhythmIrregularity      ?? 0,
 
     // Pillar 4 - Proximity
-    bluetooth_avg_devices: features.bluetoothAvgDevices    ?? 0,
-    wifi_diversity:        features.wifiDiversity          ?? 0,
+    bluetooth_avg_devices: features.bluetoothAvgDevices     ?? 0,
+    wifi_diversity:        features.wifiDiversity           ?? 0,
   };
 }
 
+function toFraction(value) {
+  const num = Number(value ?? 0);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  if (num > 1) return Math.min(1, num / 100);
+  return Math.min(1, num);
+}
+
+
 // ── Fallback: use local rule-based scorer if backend is offline ────────────
-export async function fetchIsolationRiskWithFallback(
-  userId,
-  dailyRecords,
-  prefs,
-) {
+export async function fetchIsolationRiskWithFallback(userId, dailyRecords, prefs) {
   try {
     return await fetchIsolationRisk(userId, dailyRecords);
   } catch (err) {
