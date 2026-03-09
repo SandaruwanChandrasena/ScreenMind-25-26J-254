@@ -1,6 +1,6 @@
 
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api/v1/';  // e.g. 'http://192.168.1.x:8000/api/v1'
+const API_BASE_URL = 'http://10.234.18.130:8000/api/v1/isolation';
 
 // ── Main function ──────────────────────────────────────────────────────────
 
@@ -51,7 +51,7 @@ function mapFeaturesToSchema(features) {
   return {
     // Pillar 1 - Mobility
     daily_distance_m:      features.dailyDistanceMeters     ?? 0,
-    time_at_home_pct:      features.timeAtHomePct           ?? 0,
+    time_at_home_pct:      toFraction(features.timeAtHomePct),
     location_entropy:      features.locationEntropy         ?? 0,
     transitions:           features.transitions             ?? 0,
     radius_of_gyration_km: (features.radiusOfGyration ?? 0) / 1000, // metres → km
@@ -68,13 +68,20 @@ function mapFeaturesToSchema(features) {
     unlocks_per_day:       features.unlocks                 ?? 0,
     total_screen_min:      features.totalScreenTimeMinutes  ?? 0,
     social_app_min:        features.socialMinutes           ?? 0,
-    social_pct:            features.socialPct               ?? 0,
+    social_pct:            toFraction(features.socialPct),
     rhythm_irregularity:   features.rhythmIrregularity      ?? 0,
 
     // Pillar 4 - Proximity
     bluetooth_avg_devices: features.bluetoothAvgDevices     ?? 0,
     wifi_diversity:        features.wifiDiversity           ?? 0,
   };
+}
+
+function toFraction(value) {
+  const num = Number(value ?? 0);
+  if (!Number.isFinite(num) || num <= 0) return 0;
+  if (num > 1) return Math.min(1, num / 100);
+  return Math.min(1, num);
 }
 
 
