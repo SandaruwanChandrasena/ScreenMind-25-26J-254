@@ -18,6 +18,7 @@ import {
   getSessionSummary,
   getActiveSleepSession,
   getMorningCheckInForSession,
+  getLast7Sessions,
 } from "../services/sleepRepository";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -200,12 +201,12 @@ function CheckInCard({ checkIn, navigation }) {
       </View>
 
       {/* Update button */}
-      <Pressable
+      {/* <Pressable
         onPress={() => navigation.navigate("SleepCheckIn")}
         style={styles.updateCheckInBtn}
       >
         <Text style={styles.updateCheckInText}>✏️ Update Check-In</Text>
-      </Pressable>
+      </Pressable> */}
     </Card>
   );
 }
@@ -238,6 +239,8 @@ export default function SleepDetailsScreen({ route, navigation }) {
   const [summary, setSummary] = useState(null);
   const [checkIn, setCheckIn] = useState(null);
   const [sessionId, setSessionId] = useState(passedSessionId);
+  const [weeklyData, setWeeklyData] = useState([]);
+  const [period, setPeriod] = useState('day'); // 'day', 'week', 'month'
 
   async function loadDetails() {
     setLoading(true);
@@ -276,6 +279,10 @@ export default function SleepDetailsScreen({ route, navigation }) {
       const ci = await getMorningCheckInForSession(sid);
       setCheckIn(ci);
 
+      // Load last 7 sessions for weekly trend
+      const last7 = await getLast7Sessions(userId);
+      setWeeklyData(last7 || []);
+
     } catch (e) {
       console.log("SleepDetails load error:", e);
       Alert.alert("Error", "Failed to load sleep details.");
@@ -289,57 +296,165 @@ export default function SleepDetailsScreen({ route, navigation }) {
   }, [passedSessionId]);
 
   const ui = useMemo(() => {
-    if (!summary) return null;
+    if (!summary && period === 'day') return null;
+    if (period !== 'day' && weeklyData.length === 0) return null;
 
-    const durationMs = summary.durationMs ?? 0;
+    // Aggregate data based on period
+    let aggregatedData;
+    if (period === 'day') {
+      aggregatedData = summary;
+    } else {
+      // For week/month, aggregate weeklyData
+      const sessions = period === 'week' ? weeklyData.slice(0, 7) : weeklyData;
+      const totalDuration = sessions.reduce((sum, s) => sum + (s.durationMs || 0), 0);
+      const totalUnlocks = sessions.reduce((sum, s) => sum + (s.unlockCount || 0), 0);
+      const totalNotifs = sessions.reduce((sum, s) => sum + (s.notifCount || 0), 0);
+      const totalScreenOn = sessions.reduce((sum, s) => sum + (s.screenOnCount || 0), 0);
+      const avgQuality = sessions.length > 0 ? sessions.reduce((sum, s) => {
+        const q = computeQualityPercent({
+          durationMs: s.durationMs,
+          unlockCount: s.unlockCount,
+          notifCount: s.notifCount,
+          selfReported: null,
+        });
+        return sum + q;
+      }, 0) / sessions.length : 0;
+
+      aggregatedData = {
+        durationMs: totalDuration,
+        unlockCount: totalUnlocks,
+        notifCount: totalNotifs,
+        screenOnCount: totalScreenOn,
+        sessionCount: sessions.length,
+        avgQuality: Math.round(avgQuality),
+      };
+    }
+
+    const durationMs = aggregatedData.durationMs ?? 0;
     const hours = durationMs / (1000 * 60 * 60);
 
-    const timeInBed = msToHrsMins(durationMs);
-    const timeAsleep = msToHrsMins(Math.max(0, durationMs - summary.unlockCount * 2 * 60000));
-    const timeToSleep = `${Math.min(90, 10 + summary.unlockCount * 2)} min`;
+    const timeInBed = period === 'day'
+      ? msToHrsMins(durationMs)
+      : `${Math.round(hours)}h ${Math.round((hours % 1) * 60)}m avg/night`;
 
-    // Use self-reported quality if check-in exists
-    const selfReported = checkIn?.sleep_quality ?? null;
-    const quality = computeQualityPercent({
-      durationMs,
-      unlockCount: summary.unlockCount,
-      notifCount: summary.notifCount,
-      selfReported,
-    });
+    const timeAsleep = period === 'day'
+      ? msToHrsMins(Math.max(0, durationMs - aggregatedData.unlockCount * 2 * 60000))
+      : msToHrsMins(Math.max(0, (durationMs - aggregatedData.unlockCount * 2 * 60000) / (aggregatedData.sessionCount || 1)));
 
-    // Weekly bars (demo; replace with real getLast7Sessions later)
-    const bars = [
-      { id: "0", label: "M", value: 4 },
-      { id: "1", label: "T", value: 6 },
-      { id: "2", label: "W", value: 5 },
-      { id: "3", label: "T", value: 8 },
-      { id: "4", label: "F", value: 7 },
-      { id: "5", label: "S", value: 3 },
-      { id: "6", label: "S", value: 4 },
+    const timeToSleep = `${Math.min(90, 10 + Math.round(aggregatedData.unlockCount / (aggregatedData.sessionCount || 1)) * 2)} min`;
+
+    // Use self-reported quality if check-in exists (day view only)
+    const selfReported = period === 'day' ? (checkIn?.sleep_quality ?? null) : null;
+    const quality = period === 'day'
+      ? computeQualityPercent({
+        durationMs,
+        unlockCount: aggregatedData.unlockCount,
+        notifCount: aggregatedData.notifCount,
+        selfReported,
+      })
+      : aggregatedData.avgQuality;
+
+    // Bars for chart based on selected period
+    let bars;
+    let chartTitle;
+
+    if (period === 'day') {
+      // Day view: show last 7 days trend
+      bars = weeklyData.slice(0, 7).reverse().map((s, idx) => {
+        const hours = (s.durationMs || 0) / (1000 * 60 * 60);
+        const durBad = clamp01((7 - hours) / 3);
+        const unlockBad = clamp01((s.unlockCount || 0) / 12);
+        const notifBad = clamp01((s.notifCount || 0) / 15);
+        const disruptionScore = durBad * 5 + unlockBad * 3 + notifBad * 2;
+
+        const date = new Date(s.end || s.start);
+        const dayLabel = ['S', 'M', 'T', 'W', 'T', 'F', 'S'][date.getDay()];
+
+        return {
+          id: String(idx),
+          label: dayLabel,
+          value: Math.round(disruptionScore),
+        };
+      });
+      chartTitle = "Last 7 Days Trend";
+    } else if (period === 'week') {
+      // Week view: show last 7 sessions with date labels
+      bars = weeklyData.slice(0, 7).reverse().map((s, idx) => {
+        const hours = (s.durationMs || 0) / (1000 * 60 * 60);
+        const durBad = clamp01((7 - hours) / 3);
+        const unlockBad = clamp01((s.unlockCount || 0) / 12);
+        const notifBad = clamp01((s.notifCount || 0) / 15);
+        const disruptionScore = durBad * 5 + unlockBad * 3 + notifBad * 2;
+
+        const date = new Date(s.end || s.start);
+        const dateLabel = `${date.getMonth() + 1}/${date.getDate()}`;
+
+        return {
+          id: String(idx),
+          label: dateLabel,
+          value: Math.round(disruptionScore),
+        };
+      });
+      chartTitle = "Last 7 Sessions";
+    } else {
+      // Month view: group by week, show 4 weeks
+      const weekGroups = [];
+      for (let i = 0; i < Math.min(4, Math.ceil(weeklyData.length / 7)); i++) {
+        const weekSessions = weeklyData.slice(i * 7, (i + 1) * 7);
+        if (weekSessions.length === 0) break;
+
+        const avgDisruption = weekSessions.reduce((sum, s) => {
+          const hours = (s.durationMs || 0) / (1000 * 60 * 60);
+          const durBad = clamp01((7 - hours) / 3);
+          const unlockBad = clamp01((s.unlockCount || 0) / 12);
+          const notifBad = clamp01((s.notifCount || 0) / 15);
+          return sum + (durBad * 5 + unlockBad * 3 + notifBad * 2);
+        }, 0) / weekSessions.length;
+
+        weekGroups.push({
+          id: String(i),
+          label: `W${4 - i}`,
+          value: Math.round(avgDisruption),
+        });
+      }
+      bars = weekGroups.reverse();
+      chartTitle = "Last 4 Weeks";
+    }
+
+    // Fallback to demo data if no history
+    const barsFinal = bars && bars.length > 0 ? bars : [
+      { id: "0", label: "—", value: 0 },
     ];
 
-    const lateNightScreenMins = Math.min(180, summary.screenOnCount * 8);
-    const unlocksAfter9 = summary.unlockCount;
-    const notifCount = summary.notifCount;
+    const lateNightScreenMins = Math.min(180, aggregatedData.screenOnCount * 8);
+    const unlocksAfter9 = aggregatedData.unlockCount;
+    const notifCount = aggregatedData.notifCount;
+    const sessionCount = aggregatedData.sessionCount || 1;
 
-    const durationNote =
-      hours < 6
+    const durationNote = period === 'day'
+      ? (hours < 6
         ? "Short sleep detected. Consider reducing screen time 30–60 min before bed."
-        : "Sleep duration looks okay. Consistent bedtime improves quality.";
+        : "Sleep duration looks okay. Consistent bedtime improves quality.")
+      : `Average data from ${sessionCount} night${sessionCount > 1 ? 's' : ''}`;
 
-    const qualitySource = selfReported != null ? " (blended with check-in)" : " (sensor-based)";
+    const qualitySource = period === 'day'
+      ? (selfReported != null ? " (blended with check-in)" : " (sensor-based)")
+      : " (averaged)";
 
     return {
       timeInBed, timeAsleep, timeToSleep,
       quality: `${quality}%`,
       qualitySource,
-      bars,
+      bars: barsFinal,
+      chartTitle,
       lateNightScreenMins,
       unlocksAfter9,
       notifCount,
       durationNote,
+      period,
+      sessionCount,
     };
-  }, [summary, checkIn]);
+  }, [summary, checkIn, weeklyData, period]);
 
   return (
     <DashboardBackground>
@@ -352,8 +467,36 @@ export default function SleepDetailsScreen({ route, navigation }) {
         <Text style={styles.title}>Sleep Details</Text>
         <Text style={styles.sub}>
           Factors & insights from your phone behaviour.
-          {!!sessionId ? ` (Session #${sessionId})` : ""}
+          {period === 'day' && !!sessionId ? ` (Session #${sessionId})` : ""}
         </Text>
+
+        {/* Period Selector */}
+        <View style={styles.periodTabs}>
+          <Pressable
+            style={[styles.periodTab, period === 'day' && styles.periodTabActive]}
+            onPress={() => setPeriod('day')}
+          >
+            <Text style={[styles.periodTabText, period === 'day' && styles.periodTabTextActive]}>
+              Day
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.periodTab, period === 'week' && styles.periodTabActive]}
+            onPress={() => setPeriod('week')}
+          >
+            <Text style={[styles.periodTabText, period === 'week' && styles.periodTabTextActive]}>
+              Week
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.periodTab, period === 'month' && styles.periodTabActive]}
+            onPress={() => setPeriod('month')}
+          >
+            <Text style={[styles.periodTabText, period === 'month' && styles.periodTabTextActive]}>
+              Month
+            </Text>
+          </Pressable>
+        </View>
 
         {loading && (
           <View style={{ paddingVertical: 30 }}>
@@ -374,7 +517,7 @@ export default function SleepDetailsScreen({ route, navigation }) {
             <Card style={{ marginBottom: spacing.md }}>
               <SectionHeader
                 icon="🌙"
-                title="Last Night Summary"
+                title={period === 'day' ? "Last Night Summary" : `${period === 'week' ? 'Weekly' : 'Monthly'} Summary`}
                 sub={ui.durationNote}
               />
               <View style={styles.summaryGrid}>
@@ -389,8 +532,8 @@ export default function SleepDetailsScreen({ route, navigation }) {
               </View>
             </Card>
 
-            {/* Weekly trend */}
-            <MiniBarChart title="Weekly Disruption Trend" data={ui.bars} />
+            {/* Trend chart with dynamic title */}
+            <MiniBarChart title={ui.chartTitle} data={ui.bars} />
 
             <View style={{ height: spacing.md }} />
 
@@ -414,8 +557,8 @@ export default function SleepDetailsScreen({ route, navigation }) {
 
               <FactorRow
                 icon="🔓"
-                title="Unlocks during session"
-                value={`${ui.unlocksAfter9}`}
+                title={period === 'day' ? "Unlocks during session" : "Total unlocks"}
+                value={period === 'day' ? `${ui.unlocksAfter9}` : `${ui.unlocksAfter9} (${Math.round(ui.unlocksAfter9 / ui.sessionCount)}/night)`}
                 note="Frequent checking may indicate restlessness."
                 color="rgba(34,197,94,0.16)"
               />
@@ -425,17 +568,19 @@ export default function SleepDetailsScreen({ route, navigation }) {
               <FactorRow
                 icon="🔔"
                 title="Notifications"
-                value={`${ui.notifCount}`}
+                value={period === 'day' ? `${ui.notifCount}` : `${ui.notifCount} (${Math.round(ui.notifCount / ui.sessionCount)}/night)`}
                 note="Night notifications can interrupt sleep."
                 color="rgba(239,68,68,0.14)"
               />
             </Card>
 
-            {/* Morning Check-In card */}
-            {checkIn ? (
-              <CheckInCard checkIn={checkIn} navigation={navigation} />
-            ) : (
-              <NoCheckInCard navigation={navigation} />
+            {/* Morning Check-In card (day view only) */}
+            {period === 'day' && (
+              checkIn ? (
+                <CheckInCard checkIn={checkIn} navigation={navigation} />
+              ) : (
+                <NoCheckInCard navigation={navigation} />
+              )
             )}
           </>
         )}
@@ -453,7 +598,37 @@ const styles = StyleSheet.create({
 
   overline: { color: colors.primary, fontWeight: "900", fontSize: 11, letterSpacing: 2, marginBottom: 4 },
   title: { color: colors.text, fontSize: 26, fontWeight: "900" },
-  sub: { color: colors.muted, marginTop: 6, marginBottom: spacing.lg, lineHeight: 18 },
+  sub: { color: colors.muted, marginTop: 6, marginBottom: spacing.md, lineHeight: 18 },
+
+  // Period tabs
+  periodTabs: {
+    flexDirection: "row",
+    backgroundColor: colors.input,
+    borderRadius: 16,
+    padding: 4,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  periodTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+    borderRadius: 12,
+  },
+  periodTabActive: {
+    backgroundColor: "rgba(124,58,237,0.20)",
+    borderWidth: 1,
+    borderColor: "rgba(124,58,237,0.35)",
+  },
+  periodTabText: {
+    color: colors.muted,
+    fontWeight: "900",
+    fontSize: 13,
+  },
+  periodTabTextActive: {
+    color: colors.primary,
+  },
 
   card: {
     backgroundColor: colors.card,

@@ -25,6 +25,7 @@ const WARNING_COOLDOWN_MS = 0;
 
 let warningIntervalId = null;
 let bedtimeReminderTimeoutId = null;
+let bedtimeReminderFireAtMs = null;
 let lastWarningSentAt = null;
 
 // ─────────────────────────────────────────────
@@ -128,6 +129,7 @@ export async function scheduleBedtimeReminder() {
     clearTimeout(bedtimeReminderTimeoutId);
     bedtimeReminderTimeoutId = null;
   }
+  bedtimeReminderFireAtMs = null;
 
   try {
     const settings = await loadSleepSchedule();
@@ -152,8 +154,25 @@ export async function scheduleBedtimeReminder() {
 
     const msUntilReminder = fireTime.getTime() - now.getTime();
     const minutesUntil = Math.round(msUntilReminder / 60000);
+    bedtimeReminderFireAtMs = fireTime.getTime();
 
     bedtimeReminderTimeoutId = setTimeout(() => {
+      const firedAt = Date.now();
+      const delayMs = bedtimeReminderFireAtMs
+        ? firedAt - bedtimeReminderFireAtMs
+        : 0;
+
+      // JS timers can resume late after background/sleep. Skip stale reminders.
+      if (delayMs > 5 * 60 * 1000) {
+        console.log(
+          `⏭️ Skipping stale bedtime reminder (late by ${Math.round(delayMs / 60000)} min)`
+        );
+        bedtimeReminderTimeoutId = null;
+        bedtimeReminderFireAtMs = null;
+        scheduleBedtimeReminder();
+        return;
+      }
+
       const bedtimeStr = formatTime(
         settings.bedtimeHour,
         settings.bedtimeMinute
@@ -167,6 +186,8 @@ export async function scheduleBedtimeReminder() {
       console.log('🌙 Bedtime reminder sent');
 
       // Reschedule for tomorrow
+      bedtimeReminderTimeoutId = null;
+      bedtimeReminderFireAtMs = null;
       scheduleBedtimeReminder();
 
     }, msUntilReminder);
