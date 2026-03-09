@@ -152,8 +152,16 @@ export default function IsolationStatsScreen({ navigation }) {
           <MiniBarChart values={chartData} />
 
           <View style={styles.captionRow}>
-            <Text style={styles.caption}>Lower is better</Text>
-            <Text style={styles.captionStrong}>{avg(chartData)}/100</Text>
+            {!ui.isDemo && (
+              <Text style={styles.smallMetaInline}>
+                Records loaded: {history.length}
+              </Text>
+            )}
+
+            <View style={styles.captionRight}>
+              <Text style={styles.captionStrong}>{avg(chartData)}/100</Text>
+              <Text style={styles.captionPositive}>Lower is better</Text>
+            </View>
           </View>
 
           <View style={{ height: spacing.md }} />
@@ -166,11 +174,15 @@ export default function IsolationStatsScreen({ navigation }) {
             <Icon name="chevron-forward" size={16} color={colors.text} />
           </Pressable>
 
-          {!ui.isDemo && (
-            <Text style={styles.smallMeta}>
-              Records loaded: {history.length}
-            </Text>
-          )}
+          <View style={{ height: spacing.sm }} />
+
+          <Pressable
+            onPress={() => navigation.navigate("IsolationSuggestions")}
+            style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Text style={styles.linkText}>See Suggestions</Text>
+            <Icon name="chevron-forward" size={16} color={colors.text} />
+          </Pressable>
         </GlassCard>
 
         {/* Card 2 — Social / Withdraw */}
@@ -261,16 +273,6 @@ export default function IsolationStatsScreen({ navigation }) {
 
         <View style={{ marginTop: spacing.md }}>
           <Pressable
-            onPress={() => navigation.navigate("IsolationSuggestions")}
-            style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
-          >
-            <Text style={styles.linkText}>See Suggestions</Text>
-            <Icon name="chevron-forward" size={16} color={colors.text} />
-          </Pressable>
-
-          <View style={{ height: spacing.sm }} />
-
-          <Pressable
             onPress={() => navigation.navigate("IsolationPrivacy")}
             style={({ pressed }) => [styles.linkBtn, pressed && { opacity: 0.9 }]}
           >
@@ -326,9 +328,10 @@ const styles = StyleSheet.create({
     padding: 10, borderRadius: 10,
   },
 
-  captionRow:     { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
-  caption:        { color: colors.faint, fontSize: 12, fontWeight: "800" },
+  captionRow:     { marginTop: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  captionRight:   { alignItems: "flex-end" },
   captionStrong:  { color: colors.text, fontSize: 12, fontWeight: "900" },
+  captionPositive:{ color: "#4ade80", fontSize: 12, fontWeight: "800", marginTop: 4 },
 
   linkBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
@@ -337,7 +340,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   linkText:    { color: colors.text, fontWeight: "900" },
-  smallMeta:   { color: colors.muted, fontWeight: "800", fontSize: 12, marginTop: 10 },
+  smallMetaInline: { color: colors.muted, fontWeight: "800", fontSize: 12, marginTop: 1 },
   emptyText:   { color: colors.faint, fontSize: 13, marginVertical: 10 },
 
   jdWrap: {

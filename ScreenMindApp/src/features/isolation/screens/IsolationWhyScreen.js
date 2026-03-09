@@ -29,6 +29,18 @@ function riskBadge(r) {
   return "Low";
 }
 
+function overallRiskTextAndColor(label, score) {
+  const raw = String(label || "").trim().toLowerCase();
+
+  if (raw === "high" || (score !== null && score >= 67)) {
+    return { text: "High Risk", color: "#f87171" };
+  }
+  if (raw === "medium" || raw === "moderate" || (score !== null && score >= 34)) {
+    return { text: "Moderate Risk", color: "#fbbf24" };
+  }
+  return { text: "Low Risk", color: "#4ade80" };
+}
+
 // ─── Fallback reasons when no data exists yet ────────────────────────────────
 const PLACEHOLDER_REASONS = [
   {
@@ -48,6 +60,7 @@ export default function IsolationWhyScreen() {
   const [loading, setLoading]   = useState(true);
   const [riskLabel, setRiskLabel] = useState("");
   const [riskScore, setRiskScore] = useState(null);
+  const scoreRisk = overallRiskTextAndColor(riskLabel, riskScore);
 
   useEffect(() => {
     (async () => {
@@ -75,9 +88,6 @@ export default function IsolationWhyScreen() {
     <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Why this risk?</Text>
-        <Text style={styles.sub}>
-          Explainable factors that contributed to your isolation score.
-        </Text>
 
         {loading ? (
           <View style={styles.centered}>
@@ -89,7 +99,10 @@ export default function IsolationWhyScreen() {
             {riskScore !== null && (
               <View style={styles.scoreBadge}>
                 <Text style={styles.scoreBadgeText}>
-                  Current score: {riskScore}/100 — {riskLabel}
+                  Current score: {riskScore}/100 - {" "}
+                  <Text style={[styles.scoreBadgeRiskText, { color: scoreRisk.color }]}>
+                    {scoreRisk.text}
+                  </Text>
                 </Text>
               </View>
             )}
@@ -131,11 +144,6 @@ export default function IsolationWhyScreen() {
                 </View>
               ))}
             </GlassCard>
-
-            <Text style={styles.note}>
-              Privacy: Only aggregated behavioural signals are analysed. No message content,
-              call audio, or precise GPS trails are stored or uploaded.
-            </Text>
           </>
         )}
 
@@ -148,7 +156,6 @@ export default function IsolationWhyScreen() {
 const styles = StyleSheet.create({
   container: { padding: spacing.lg, paddingTop: spacing.xl, flexGrow: 1 },
   title:     { color: colors.text, fontSize: 24, fontWeight: "900" },
-  sub:       { color: colors.muted, marginTop: 8, lineHeight: 18 },
 
   centered: { flex: 1, alignItems: "center", justifyContent: "center", paddingTop: 60 },
 
@@ -163,6 +170,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
   },
   scoreBadgeText: { color: colors.text, fontWeight: "900", fontSize: 13 },
+  scoreBadgeRiskText: { fontWeight: "900" },
 
   item:     { paddingVertical: 12 },
   borderTop:{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 4 },
@@ -180,5 +188,4 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: "900" },
 
   itemDetail: { color: colors.faint, marginTop: 6, lineHeight: 18 },
-  note:       { color: colors.faint, marginTop: spacing.lg, fontSize: 12, lineHeight: 16 },
 });
