@@ -204,16 +204,6 @@ export default function IsolationOverviewScreen({ navigation }) {
     return list.slice(0, 4);
   }, [features, prefs]);
 
-  // Build summary sentence
-  const summary = useMemo(() => {
-    if (!risk.reasons?.length) {
-      return "Your recent patterns look balanced. Keep maintaining healthy social exposure.";
-    }
-    const top = risk.reasons.filter((r) => r.risk > 0.3).slice(0, 2);
-    if (!top.length) return "No significant risk factors detected this week. Keep it up!";
-    return top.map((r) => r.title).join(" + ") + " detected over the last 7 days.";
-  }, [risk]);
-
   // ─── Loading state ────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -277,8 +267,23 @@ export default function IsolationOverviewScreen({ navigation }) {
         >
           <GaugeRing score={risk.score} label={risk.label} size={200} />
 
-          <View style={{ height: spacing.md }} />
-          <Text style={styles.body}>{summary}</Text>
+          <View style={styles.riskLegendRow}>
+            <View style={styles.riskLegendItem}>
+              <View style={[styles.riskLegendDot, styles.riskLegendDotHigh]} />
+              <Text style={[styles.riskLegendText, styles.riskLegendTextHigh]}>High Risk</Text>
+            </View>
+
+            <View style={styles.riskLegendItem}>
+              <View style={[styles.riskLegendDot, styles.riskLegendDotModerate]} />
+              <Text style={[styles.riskLegendText, styles.riskLegendTextModerate]}>Moderate Risk</Text>
+            </View>
+
+            <View style={styles.riskLegendItem}>
+              <View style={[styles.riskLegendDot, styles.riskLegendDotLow]} />
+              <Text style={[styles.riskLegendText, styles.riskLegendTextLow]}>Low Risk</Text>
+            </View>
+          </View>
+
           <View style={{ height: spacing.md }} />
 
           <Pressable style={styles.bigBtn} onPress={() => navigation.navigate("IsolationStats")}>
@@ -411,6 +416,37 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.border,
   },
   bigBtnText: { color: colors.text, fontWeight: "900" },
+
+  riskLegendRow: {
+    marginTop: 2,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+  },
+  riskLegendItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  riskLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+    marginRight: 6,
+  },
+  riskLegendDotHigh: { backgroundColor: "#fb7185" },
+  riskLegendDotModerate: { backgroundColor: "#fbbf24" },
+  riskLegendDotLow: { backgroundColor: "#4ade80" },
+  riskLegendText: { fontSize: 11, fontWeight: "800" },
+  riskLegendTextHigh: { color: "#fca5a5" },
+  riskLegendTextModerate: { color: "#fde68a" },
+  riskLegendTextLow: { color: "#86efac" },
 
   sectionTitle: { color: colors.text, fontWeight: "900", marginTop: spacing.lg, fontSize: 16 },
 
