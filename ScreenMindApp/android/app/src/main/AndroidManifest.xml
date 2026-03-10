@@ -112,7 +112,7 @@
         </receiver>
 
         <!-- ===================== -->
-        <!-- Notification Listener (Sleep / Notifications module) -->
+        <!-- Notification Listener (Social Media - Notifications module) -->
         <!-- ===================== -->
         <service
             android:name="com.lesimoes.androidnotificationlistener.RNAndroidNotificationListener"

@@ -71,34 +71,7 @@ const DEFAULT_MONITOR_APPS = {
   'com.zhiliaoapp.musically': false,
 };
 
-// ─────────────────────────────────────────────
-// ✅ CALL NOTIFICATION FILTER
-//
-// WhatsApp (and other social apps) fire a notification
-// for every call event — incoming, missed, ongoing, etc.
-// These contain zero message content so RoBERTa correctly
-// scores them Neutral (negative ≈ 0.0).
-//
-// The problem: that 0.0 is still pushed into the buffer
-// and averaged into avgScore, silently pulling the daily
-// risk level DOWN — e.g. 5 calls + 3 negative messages
-// gives avg 0.42 (MODERATE) instead of avg 0.80 (HIGH).
-//
-// Fix: drop any notification whose text matches a known
-// call pattern before it reaches the backend or buffer.
-//
-// Patterns covered — anchored (^ $) so mid-sentence "call" is never caught:
-//   incoming / outgoing / missed / ongoing / group + optional voice/video/WhatsApp
-//   WhatsApp-prefixed: "WhatsApp call", "WhatsApp voice call", etc.
-//   Standalone: "Voice call", "Video call", "Group call"
-//   Count prefix: "1 missed call", "2 missed WhatsApp calls"
-//   Status: "Calling...", "Ringing...", "On a call"
-//   Post-call: "Call connected/ended/declined/cancelled/busy/in progress"
-//   Overlay: "Tap to return to call", "Return to call"
-//
-// Real messages like "call me when free" or "lets call tomorrow"
-// are NOT matched because they don't match the anchored patterns.
-// ─────────────────────────────────────────────
+
 const CALL_PATTERN =
   /^(?:(?:incoming|outgoing|missed|ongoing|group)\s+(?:whatsapp\s+)?(?:voice\s+|video\s+)?calls?|whatsapp\s+(?:voice\s+|video\s+|group\s+)?call|(?:voice|video|group)\s+call|\d+\s+missed\s+(?:whatsapp\s+)?calls?|calling[.\u2026]+|ringing[.\u2026]+|on\s+a\s+call|call\s+(?:connected|ended|declined|cancelled|busy|in\s+progress)|tap\s+to\s+return\s+to\s+call|return\s+to\s+call)$/i;
 

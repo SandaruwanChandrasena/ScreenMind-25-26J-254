@@ -195,11 +195,12 @@ function DonutChart({ score, risk }) {
       </View>
 
       {/* Legend */}
-      <View style={donutStyles.legend}>
+      {/* <View style={donutStyles.legend}>
         <LegendDot color="#34D399" label="Low" />
         <LegendDot color="#FBBF24" label="Med" />
         <LegendDot color="#F87171" label="High" />
-      </View>
+      </View> */}
+      
     </View>
   );
 }
