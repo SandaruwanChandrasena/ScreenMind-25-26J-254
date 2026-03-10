@@ -32,10 +32,20 @@ function riskBadge(r) {
 function overallRiskTextAndColor(label, score) {
   const raw = String(label || "").trim().toLowerCase();
 
-  if (raw === "high" || (score !== null && score >= 67)) {
+  if (score !== null && score >= 67) {
     return { text: "High Risk", color: "#f87171" };
   }
-  if (raw === "medium" || raw === "moderate" || (score !== null && score >= 34)) {
+  if (score !== null && score >= 34) {
+    return { text: "Moderate Risk", color: "#fbbf24" };
+  }
+  if (score !== null) {
+    return { text: "Low Risk", color: "#4ade80" };
+  }
+
+  if (raw === "high") {
+    return { text: "High Risk", color: "#f87171" };
+  }
+  if (raw === "medium" || raw === "moderate") {
     return { text: "Moderate Risk", color: "#fbbf24" };
   }
   return { text: "Low Risk", color: "#4ade80" };

@@ -21,13 +21,15 @@ export default function ProximityExposureScreen() {
 
   // 1. Request Runtime Permissions
   const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
+    if (Platform.OS === "android") {
       try {
-        const granted = await PermissionsAndroid.requestMultiple([
+        const requested = [
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
           PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-        ]);
+        ].filter(Boolean);
+
+        const granted = await PermissionsAndroid.requestMultiple(requested);
 
         return (
           granted[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] === PermissionsAndroid.RESULTS.GRANTED
@@ -57,26 +59,26 @@ export default function ProximityExposureScreen() {
 
       // Step 2: Scan for real Bluetooth devices nearby (takes ~8 seconds)
       // NOTE: This will fail on an Emulator. Must test on a physical device.
-      const bluetoothCount = await scanBluetoothCountOnce(8);
+      const bluetoothCount = await Promise.race([
+        scanBluetoothCountOnce(5),
+        new Promise((resolve) => setTimeout(() => resolve(0), 7000)),
+      ]);
 
       // Step 3: Scan for real Wi-Fi networks nearby
       let wifiCount = 0;
       if (WifiMetricsBridge) {
-        wifiCount = await WifiMetricsBridge.getWifiNetworkCount();
+        wifiCount = await Promise.race([
+          WifiMetricsBridge.getWifiNetworkCount(),
+          new Promise((resolve) => setTimeout(() => resolve(0), 3000)),
+        ]);
       }
 
-      // Step 4: Calculate dynamic labels based on the raw numbers
-      const getLabel = (count) => {
-        if (count <= 2) return "Low";
-        if (count <= 6) return "Moderate";
-        return "High";
-      };
-
-      const environmentVariety = wifiCount > 4 ? "High (Multiple Locations)" : "Low (Static Location)";
+      // Step 4: Build plain display values (no risk words / parentheses)
+      const environmentVariety = wifiCount > 4 ? "Multiple locations" : "Static location";
 
       setData([
-        { k: "Bluetooth proximity", v: `${getLabel(bluetoothCount)} (${bluetoothCount} devices)` },
-        { k: "WiFi diversity", v: `${getLabel(wifiCount)} (${wifiCount} networks)` },
+        { k: "Bluetooth proximity", v: `${bluetoothCount} devices` },
+        { k: "WiFi diversity", v: `${wifiCount} networks` },
         { k: "Environment variety", v: environmentVariety },
       ]);
     } catch (err) {
