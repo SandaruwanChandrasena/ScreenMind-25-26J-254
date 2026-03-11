@@ -10,6 +10,11 @@ class NotificationAnalysisRequest(BaseModel):
     cleaned_text: str      # Already sanitized in headlessTask.js
     timestamp: Optional[str] = None
 
+# ─── NEW: Journal Analysis Request ───────────────────────────────────────────
+class JournalAnalysisRequest(BaseModel):
+    """What React Native sends for journal text analysis."""
+    text: str              # Raw journal text typed by user
+
 # ─── OUTPUT ───────────────────────────────────────────────────────────────────
 
 class SentimentResult(BaseModel):
@@ -28,7 +33,7 @@ class DissonanceResult(BaseModel):
     negative_emojis_found: int
     positive_emojis_found: int
     total_emojis_found: int
-    risk_level: str        # "low", "high"
+    risk_level: str        # "low", "high", "critical"
     masking_note: str
 
 class NotificationAnalysisResponse(BaseModel):
@@ -40,3 +45,15 @@ class NotificationAnalysisResponse(BaseModel):
     sentiment: SentimentResult
     dissonance: DissonanceResult
     firebase_saved: bool
+
+# ─── NEW: Journal Analysis Response ──────────────────────────────────────────
+class JournalAnalysisResponse(BaseModel):
+    """Response sent back to React Native for journal analysis."""
+    status: str
+    sentimentLabel: str    # "Positive", "Neutral", "Negative"
+    sentimentScore: float  # negative score 0-1 (e.g. 0.62)
+    riskLevel: str         # "LOW", "MODERATE", "HIGH"
+    negative: float        # raw % from RoBERTa (0-100)
+    neutral: float
+    positive: float
+    confidence: float

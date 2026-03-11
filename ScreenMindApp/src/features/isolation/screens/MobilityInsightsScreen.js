@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, Platform } from "react-native";
-import ScreenBackground from "../../../components/ScreenBackground";
+import DashboardBackground from "../../../components/DashboardBackground";
 import { colors } from "../../../theme/colors";
 import { spacing } from "../../../theme/spacing";
 import { NativeModules } from "react-native";
@@ -98,7 +98,7 @@ export default function MobilityInsightsScreen() {
   };
 
   return (
-    <ScreenBackground>
+    <DashboardBackground>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>🚶 Mobility Insights</Text>
         <Text style={styles.sub}>
@@ -129,7 +129,7 @@ export default function MobilityInsightsScreen() {
             value={formatDistance(gpsFeatures?.dailyDistanceMeters)} 
           />
           <Row 
-            label="Time at home" 
+            label="Time at primary location" 
             value={formatTimeAtHome(gpsFeatures?.timeAtHomePct)} 
           />
           <Row 
@@ -151,7 +151,7 @@ export default function MobilityInsightsScreen() {
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
-    </ScreenBackground>
+    </DashboardBackground>
   );
 }
 

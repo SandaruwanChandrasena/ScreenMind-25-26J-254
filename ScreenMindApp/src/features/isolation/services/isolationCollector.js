@@ -2,61 +2,123 @@ import { NativeModules, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { BleManager } from "react-native-ble-plx";
 
-const { UsageStatsBridge, ServiceStarter, IsolationMetricsBridge } = NativeModules;
-let ble = null;
+// ── New imports ───────────────────────────────────────────────────────────────
+import { collectWifiDiversity }       from "./wifiDiversityCollector";
+import { computeRhythmIrregularity }  from "./rhythmCalculator";
 
-function getBleManager() {
-  if (!ble && BleManager) {
-    try {
-      ble = new BleManager();
-    } catch (error) {
-      console.warn("Failed to initialize BleManager:", error);
-    }
+const {
+  IsolationMetricsBridge,
+  BehaviourMetrics,
+  CommunicationStats,
+  ServiceStarter,
+  UsageStatsBridge,
+} = NativeModules;
+
+// ─── BLE singleton ────────────────────────────────────────────────────────────
+let _ble = null;
+function getBle() {
+  if (!_ble) {
+    try { _ble = new BleManager(); } catch (e) { console.warn("BLE init failed:", e); }
   }
-  return ble;
+  return _ble;
 }
 
-const KEY_PREFS = "isolation_prefs";
+// ─── Prefs ────────────────────────────────────────────────────────────────────
+const KEY_PREFS = "isolation_prefs_v1";
 
 export async function getPrefs() {
-  const raw = await AsyncStorage.getItem(KEY_PREFS);
-  return raw ? JSON.parse(raw) : {
-    gps: true, calls: false, sms: false, usage: true, bluetooth: true, wifi: false
-  };
+  try {
+    const raw = await AsyncStorage.getItem(KEY_PREFS);
+    return raw
+      ? JSON.parse(raw)
+      : { gps: true, calls: false, sms: false, usage: true, bluetooth: true, wifi: false };
+  } catch {
+    return { gps: true, calls: false, sms: false, usage: true, bluetooth: true, wifi: false };
+  }
 }
 
 export async function setPrefs(prefs) {
   await AsyncStorage.setItem(KEY_PREFS, JSON.stringify(prefs));
 }
 
-// ---------- Usage Access ----------
-export function openUsageAccessSettings() {
-  if (Platform.OS === "android") UsageStatsBridge?.openUsageAccessSettings();
+// ─── Individual collectors ────────────────────────────────────────────────────
+
+async function collectGpsFeatures() {
+  if (Platform.OS !== "android" || !IsolationMetricsBridge) return {};
+  try {
+    const f = await IsolationMetricsBridge.getGpsFeaturesToday();
+    return {
+      dailyDistanceMeters: f.dailyDistanceMeters ?? 0,
+      timeAtHomePct:        f.timeAtHomePct        ?? 0,
+      locationEntropy:      f.locationEntropy       ?? 0,
+      transitions:          f.transitions           ?? 0,
+      radiusOfGyration:     f.radiusOfGyration      ?? 0,
+    };
+  } catch (e) {
+    console.warn("GPS features error:", e);
+    return {};
+  }
 }
 
-export async function getScreenTimeLast24hMs() {
-  if (Platform.OS !== "android") return 0;
-  return await UsageStatsBridge.getScreenTimeLast24h();
-}
-
-// ---------- Bluetooth scan (counts only) ----------
-export async function scanBluetoothCountOnce(seconds = 8) {
-  const bleManager = getBleManager();
-  if (!bleManager) {
-    console.warn("BleManager not available, skipping scan");
+async function collectUnlockCount() {
+  if (Platform.OS !== "android" || !IsolationMetricsBridge) return 0;
+  try {
+    return (await IsolationMetricsBridge.getUnlockCountToday()) ?? 0;
+  } catch (e) {
+    console.warn("Unlock count error:", e);
     return 0;
   }
-  
+}
+
+async function collectBehaviourMetrics() {
+  if (Platform.OS !== "android" || !BehaviourMetrics) return {};
+  try {
+    const hasAccess = await BehaviourMetrics.hasUsageAccess();
+    if (!hasAccess) return {};
+    const s = await BehaviourMetrics.getTodayBehaviourStats();
+    return {
+      nightUsageMinutes:        s.nightUsageMinutes          ?? 0,
+      totalScreenTimeMinutes:   s.totalScreenTimeMinutesToday ?? 0,
+      socialMinutes:            s.socialMinutesToday          ?? 0,
+      socialPct:                s.socialPercentToday          ?? 0,
+      unlockCountFromBehaviour: s.unlockCountToday            ?? null,
+    };
+  } catch (e) {
+    console.warn("BehaviourMetrics error:", e);
+    return {};
+  }
+}
+
+async function collectCommunicationStats() {
+  if (Platform.OS !== "android" || !CommunicationStats) return {};
+  try {
+    const s = await CommunicationStats.getCommunicationStats();
+    if (!s) return {};
+    return {
+      callsPerDay:            s.callsPerDay            ?? 0,
+      avgCallDurationSeconds: s.avgCallDurationSeconds  ?? 0,
+      uniqueContacts:         s.uniqueContacts          ?? 0,
+      smsPerDay:              s.smsCountPerDay          ?? 0,
+      silenceHours:           s.interactionSilenceHours ?? 0,
+    };
+  } catch (e) {
+    console.warn("CommunicationStats error:", e);
+    return {};
+  }
+}
+
+async function collectBluetoothCount(seconds = 8) {
+  const ble = getBle();
+  if (!ble) return 0;
   return new Promise((resolve) => {
     const seen = new Set();
-    const sub = bleManager.onStateChange((state) => {
+    const sub = ble.onStateChange((state) => {
       if (state !== "PoweredOn") return;
-      bleManager.startDeviceScan(null, { allowDuplicates: false }, (err, device) => {
+      ble.startDeviceScan(null, { allowDuplicates: false }, (err, device) => {
         if (device?.id) seen.add(device.id);
       });
-
       setTimeout(() => {
-        bleManager.stopDeviceScan();
+        try { ble.stopDeviceScan(); } catch {}
         sub.remove();
         resolve(seen.size);
       }, seconds * 1000);
@@ -64,118 +126,134 @@ export async function scanBluetoothCountOnce(seconds = 8) {
   });
 }
 
-// ---------- WiFi Diversity ----------
-// Note: React Native doesn't have built-in WiFi scanning for privacy reasons
-// You'll need a native module or use react-native-wifi-reborn for Android
-export async function getWifiDiversity() {
-  // Placeholder: will need native implementation
-  // Returns entropy value 0-2 (0=always same network, higher=more diversity)
+export async function scanBluetoothCountOnce(seconds = 8) {
+  return collectBluetoothCount(seconds);
+}
+
+export async function getScreenTimeLast24hMs() {
+  if (Platform.OS !== "android") return 0;
+
+  try {
+    if (BehaviourMetrics?.getTodayBehaviourStats) {
+      const stats = await BehaviourMetrics.getTodayBehaviourStats();
+      const minutes = stats?.totalScreenTimeMinutesToday ?? 0;
+      return Number(minutes) * 60 * 1000;
+    }
+
+    if (UsageStatsBridge?.getScreenTimeLast24hMs) {
+      const milliseconds = await UsageStatsBridge.getScreenTimeLast24hMs();
+      return Number(milliseconds) || 0;
+    }
+
+    if (UsageStatsBridge?.getTotalScreenTimeMsToday) {
+      const milliseconds = await UsageStatsBridge.getTotalScreenTimeMsToday();
+      return Number(milliseconds) || 0;
+    }
+
+    if (UsageStatsBridge?.getTotalScreenTimeMinutesToday) {
+      const minutes = await UsageStatsBridge.getTotalScreenTimeMinutesToday();
+      return Number(minutes) * 60 * 1000;
+    }
+  } catch (e) {
+    console.warn("Screen time collection error:", e);
+  }
+
   return 0;
 }
 
-// ---------- Generate Dummy Features (for testing) ----------
-export function generateDummyFeatures() {
-  return {
-    // Mobility (GPS-based)
-    dailyDistanceMeters: Math.random() * 5000 + 500, // 500m - 5.5km
-    timeAtHomePct: Math.random() * 40 + 50, // 50-90%
-    locationEntropy: Math.random() * 1.5, // 0-1.5
-    transitions: Math.floor(Math.random() * 12), // 0-12 transitions
-    radiusOfGyration: Math.random() * 3000 + 200, // 200m - 3.2km
-    daysNotLeaving: Math.floor(Math.random() * 3), // 0-3 days
+// ─── Master collector ─────────────────────────────────────────────────────────
 
-    // Communication metadata
-    callsPerDay: Math.random() * 8, // 0-8 calls
-    uniqueContacts: Math.floor(Math.random() * 10) + 1, // 1-10 contacts
-    avgCallDuration: Math.random() * 300 + 30, // 30-330 seconds
-    smsPerDay: Math.random() * 15, // 0-15 SMS
-    silenceHours: Math.random() * 15 + 4, // 4-19 hours of no calls
-
-    // Phone behavior
-    nightUsageMinutes: Math.random() * 120, // 0-120 minutes
-    unlocks: Math.floor(Math.random() * 80) + 20, // 20-100 unlocks
-    rhythmIrregularity: Math.random() * 0.6 + 0.2, // 0.2-0.8
-
-    // Proximity & environment
-    bluetoothAvgDevices: Math.floor(Math.random() * 12), // 0-12 devices
-    wifiDiversity: Math.random() * 1.5, // 0-1.5 entropy
-  };
-}
-
-// ---------- Collect Real Features ----------
+/**
+ * collectRealFeatures()
+ *
+ * Returns one flat features object ready for computeIsolationRisk().
+ * Every field has a safe default of 0 if its data source is unavailable.
+ */
 export async function collectRealFeatures() {
   const prefs = await getPrefs();
+
   const features = {
+    // Mobility
     dailyDistanceMeters: 0,
-    timeAtHomePct: 0,
-    locationEntropy: 0,
-    transitions: 0,
-    radiusOfGyration: 0,
-    daysNotLeaving: 0,
-    callsPerDay: 0,
-    uniqueContacts: 0,
-    avgCallDuration: 0,
-    smsPerDay: 0,
-    silenceHours: 0,
-    nightUsageMinutes: 0,
-    unlocks: 0,
-    rhythmIrregularity: 0,
+    timeAtHomePct:        0,
+    locationEntropy:      0,
+    transitions:          0,
+    radiusOfGyration:     0,
+    // Communication
+    callsPerDay:            0,
+    avgCallDurationSeconds: 0,
+    uniqueContacts:         0,
+    smsPerDay:              0,
+    silenceHours:           0,
+    // Behaviour
+    nightUsageMinutes:      0,
+    totalScreenTimeMinutes: 0,
+    socialMinutes:          0,
+    socialPct:              0,
+    unlocks:                0,
+    rhythmIrregularity:     0,  // ← now computed below
+    // Proximity
     bluetoothAvgDevices: 0,
-    wifiDiversity: 0,
+    wifiDiversity:       0,     // ← now computed below
   };
 
-  try {
-    // Collect GPS features if enabled (Android only)
-    if (prefs.gps && Platform.OS === "android" && IsolationMetricsBridge) {
-      try {
-        const gpsFeatures = await IsolationMetricsBridge.getGpsFeaturesToday();
-        features.dailyDistanceMeters = gpsFeatures.dailyDistanceMeters || 0;
-        features.timeAtHomePct = gpsFeatures.timeAtHomePct || 0;
-        features.locationEntropy = gpsFeatures.locationEntropy || 0;
-        features.transitions = gpsFeatures.transitions || 0;
-        features.radiusOfGyration = gpsFeatures.radiusOfGyration || 0;
-      } catch (err) {
-        console.warn("GPS features error:", err);
-      }
+  // ── 1) GPS ────────────────────────────────────────────────────────────────
+  if (prefs.gps) {
+    Object.assign(features, await collectGpsFeatures());
+  }
+
+  // ── 2) Unlock count ───────────────────────────────────────────────────────
+  const unlockFromBridge = await collectUnlockCount();
+
+  // ── 3) Screen-time / behaviour ────────────────────────────────────────────
+  if (prefs.usage) {
+    const beh = await collectBehaviourMetrics();
+    features.nightUsageMinutes      = beh.nightUsageMinutes      ?? 0;
+    features.totalScreenTimeMinutes = beh.totalScreenTimeMinutes ?? 0;
+    features.socialMinutes          = beh.socialMinutes          ?? 0;
+    features.socialPct              = beh.socialPct              ?? 0;
+    features.unlocks =
+      unlockFromBridge > 0
+        ? unlockFromBridge
+        : (beh.unlockCountFromBehaviour ?? 0);
+
+    // ── Rhythm irregularity (now real, from rhythmCalculator) ────────────
+    // Uses unlock timestamps stored by recordUnlockEvent() / startRhythmTracking()
+    features.rhythmIrregularity = await computeRhythmIrregularity();
+  } else {
+    features.unlocks = unlockFromBridge;
+  }
+
+  // ── 4) Communication ──────────────────────────────────────────────────────
+  if (prefs.calls || prefs.sms) {
+    const comm = await collectCommunicationStats();
+    if (prefs.calls) {
+      features.callsPerDay            = comm.callsPerDay            ?? 0;
+      features.avgCallDurationSeconds = comm.avgCallDurationSeconds ?? 0;
+      features.uniqueContacts         = comm.uniqueContacts          ?? 0;
+      features.silenceHours           = comm.silenceHours            ?? 0;
     }
-
-    // Collect unlock count if enabled (Android only)
-    if (prefs.usage && Platform.OS === "android" && IsolationMetricsBridge) {
-      try {
-        features.unlocks = await IsolationMetricsBridge.getUnlockCountToday();
-      } catch (err) {
-        console.warn("Unlock count error:", err);
-      }
+    if (prefs.sms) {
+      features.smsPerDay = comm.smsPerDay ?? 0;
+      if (!prefs.calls) features.uniqueContacts = comm.uniqueContacts ?? 0;
     }
+  }
 
-    // Collect usage data if enabled
-    if (prefs.usage && Platform.OS === "android") {
-      const screenTimeMs = await getScreenTimeLast24hMs();
-      // Estimate night usage (11pm-7am) as roughly 25% of total (placeholder)
-      features.nightUsageMinutes = Math.round((screenTimeMs / 60000) * 0.25);
-    }
+  // ── 5) Bluetooth ──────────────────────────────────────────────────────────
+  if (prefs.bluetooth) {
+    features.bluetoothAvgDevices = await collectBluetoothCount(8);
+  }
 
-    // Collect bluetooth data if enabled
-    if (prefs.bluetooth) {
-      features.bluetoothAvgDevices = await scanBluetoothCountOnce(8);
-    }
-
-    // Collect WiFi data if enabled  
-    if (prefs.wifi) {
-      features.wifiDiversity = await getWifiDiversity();
-    }
-
-    // Communication features require permissions
-    // TODO: Add call log and SMS reading (with proper permissions)
-
-  } catch (error) {
-    console.warn("Error collecting features:", error);
+  // ── 6) WiFi diversity (now real entropy from wifiDiversityCollector) ──────
+  if (prefs.wifi) {
+    features.wifiDiversity = await collectWifiDiversity();
   }
 
   return features;
 }
 
-// ---------- Service Control ----------
+// ─── Service control ──────────────────────────────────────────────────────────
+
 export function startLocationTracking() {
   if (Platform.OS === "android" && ServiceStarter) {
     ServiceStarter.startLocationService();
@@ -186,4 +264,9 @@ export function stopLocationTracking() {
   if (Platform.OS === "android" && ServiceStarter) {
     ServiceStarter.stopLocationService();
   }
+}
+
+export function openUsageAccessSettings() {
+  const m = BehaviourMetrics || UsageStatsBridge;
+  if (m?.openUsageAccessSettings) m.openUsageAccessSettings();
 }

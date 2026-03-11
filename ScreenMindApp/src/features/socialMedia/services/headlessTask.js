@@ -4,9 +4,19 @@ import { PYTHON_BACKEND_URL } from '@env';
 import { NativeModules } from 'react-native';
 
 // ─────────────────────────────────────────────
+// ✅ Local date string — fixes UTC timezone bug
+// toISOString() returns UTC time which is wrong
+// for Sri Lanka (UTC+5:30). This uses device local time.
+// ─────────────────────────────────────────────
+function getLocalDateStr(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// ─────────────────────────────────────────────
 // ✅ Get current user ID from AsyncStorage
-// Saved by AuthContext when user logs in
-// Works reliably in background headless tasks
 // ─────────────────────────────────────────────
 async function getUserId() {
   try {
@@ -33,60 +43,60 @@ const SOCIAL_APP_WHITELIST = [
 ];
 
 const APP_NAMES = {
-  'com.whatsapp': 'WhatsApp',
-  'com.facebook.katana': 'Messenger',
-  'com.instagram.android': 'Instagram',
+  'com.whatsapp':             'WhatsApp',
+  'com.facebook.katana':      'Messenger',
+  'com.instagram.android':    'Instagram',
   'com.zhiliaoapp.musically': 'TikTok',
 };
 
 // ─────────────────────────────────────────────
 // ✅ CONSTANTS
 // ─────────────────────────────────────────────
-const BUFFER_KEY = 'sm_message_buffer';
-const COOLDOWN_KEY = 'sm_alert_cooldown';
-const OVERLAY_KEY = 'sm_overlay_trigger';
-const SETTINGS_KEY = 'sm_alert_settings';
-const MONITOR_APPS_KEY = 'sm_monitor_apps'; // ✅ NEW — which apps to monitor
-const MAX_BUFFER_SIZE = 20;
-const HIGH_THRESHOLD = 0.7;
-const MED_THRESHOLD = 0.4;
+const BUFFER_KEY       = 'sm_message_buffer';
+const COOLDOWN_KEY     = 'sm_alert_cooldown';
+const OVERLAY_KEY      = 'sm_overlay_trigger';
+const SETTINGS_KEY     = 'sm_alert_settings';
+const MONITOR_APPS_KEY = 'sm_monitor_apps';
+const MAX_BUFFER_SIZE  = 20;
+const HIGH_THRESHOLD   = 0.7;
+const MED_THRESHOLD    = 0.4;
 
 const DEFAULT_TIME_WINDOW_MINS = 10;
-const DEFAULT_MIN_MESSAGES = 3;
+const DEFAULT_MIN_MESSAGES     = 3;
 
-// Default monitored apps (all ON by default)
 const DEFAULT_MONITOR_APPS = {
-  'com.whatsapp': true,
-  'com.facebook.katana': false,
-  'com.instagram.android': false,
+  'com.whatsapp':             true,
+  'com.facebook.katana':      false,
+  'com.instagram.android':    false,
   'com.zhiliaoapp.musically': false,
 };
 
+
+const CALL_PATTERN =
+  /^(?:(?:incoming|outgoing|missed|ongoing|group)\s+(?:whatsapp\s+)?(?:voice\s+|video\s+)?calls?|whatsapp\s+(?:voice\s+|video\s+|group\s+)?call|(?:voice|video|group)\s+call|\d+\s+missed\s+(?:whatsapp\s+)?calls?|calling[.\u2026]+|ringing[.\u2026]+|on\s+a\s+call|call\s+(?:connected|ended|declined|cancelled|busy|in\s+progress)|tap\s+to\s+return\s+to\s+call|return\s+to\s+call)$/i;
+
 // ─────────────────────────────────────────────
 // ✅ LOAD USER SETTINGS
-// Reads timeWindowMins, negativeCount, and monitored apps from UI
 // ─────────────────────────────────────────────
 async function loadSettings() {
   try {
-    const raw = await AsyncStorage.getItem(SETTINGS_KEY);
+    const raw        = await AsyncStorage.getItem(SETTINGS_KEY);
     const monitorRaw = await AsyncStorage.getItem(MONITOR_APPS_KEY);
-
-    const settings = raw ? JSON.parse(raw) : {};
+    const settings   = raw ? JSON.parse(raw) : {};
     const monitorApps = monitorRaw
       ? JSON.parse(monitorRaw)
       : DEFAULT_MONITOR_APPS;
-
     return {
       timeWindowMins: settings.timeWindowMins || DEFAULT_TIME_WINDOW_MINS,
-      minMessages: settings.negativeCount || DEFAULT_MIN_MESSAGES,
-      alertHighRisk: settings.alertHighRisk !== false, // default true
+      minMessages:    settings.negativeCount  || DEFAULT_MIN_MESSAGES,
+      alertHighRisk:  settings.alertHighRisk  !== false,
       monitorApps,
     };
   } catch (e) {
     return {
       timeWindowMins: DEFAULT_TIME_WINDOW_MINS,
-      minMessages: DEFAULT_MIN_MESSAGES,
-      monitorApps: DEFAULT_MONITOR_APPS,
+      minMessages:    DEFAULT_MIN_MESSAGES,
+      monitorApps:    DEFAULT_MONITOR_APPS,
     };
   }
 }
@@ -110,10 +120,10 @@ async function analyzeOneMessage(cleanedText, appSource, userId) {
     const response = await axios.post(
       `${PYTHON_BACKEND_URL}/api/v1/social-media/analyze`,
       {
-        user_id: userId,
-        app_source: appSource,
+        user_id:      userId,
+        app_source:   appSource,
         cleaned_text: cleanedText,
-        timestamp: new Date().toISOString(),
+        timestamp:    new Date().toISOString(),
       },
     );
     return response.data;
@@ -135,14 +145,7 @@ function sentimentEmoji(label) {
 // ─────────────────────────────────────────────
 // ✅ PRINT QUEUE
 // ─────────────────────────────────────────────
-function printQueue(
-  activeBuffer,
-  allBuffer,
-  avgScore,
-  riskLevel,
-  timeWindowMins,
-  minMessages,
-) {
+function printQueue(activeBuffer, allBuffer, avgScore, riskLevel, timeWindowMins, minMessages) {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(
     `📬 ACTIVE WINDOW  [${activeBuffer.length} msgs in last ${timeWindowMins} mins | min needed: ${minMessages}]`,
@@ -150,12 +153,11 @@ function printQueue(
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   activeBuffer.forEach((item, index) => {
     const appName = APP_NAMES[item.app] || item.app;
-    const emoji = sentimentEmoji(item.label);
-    const score =
-      typeof item.score === 'number' ? item.score.toFixed(2) : '0.00';
-    const age = Math.round((Date.now() - new Date(item.time).getTime()) / 1000);
+    const emoji   = sentimentEmoji(item.label);
+    const score   = typeof item.score === 'number' ? item.score.toFixed(2) : '0.00';
+    const age     = Math.round((Date.now() - new Date(item.time).getTime()) / 1000);
     console.log(
-      `  [${index + 1}] ${appName.padEnd(10)} → "${item.text}"`.padEnd(55) +
+      `  [${index + 1}] ${appName.padEnd(10)} -> "${item.text}"`.padEnd(55) +
         `${emoji} ${item.label} (${score}) ${age}s ago`,
     );
   });
@@ -187,37 +189,26 @@ async function isCooldownActive() {
 
 // ─────────────────────────────────────────────
 // ✅ TRIGGER OVERLAY
-// 1. Calls native OverlayModule → shows over ALL apps
-// 2. Also saves to AsyncStorage → shows inside app (fallback)
 // ─────────────────────────────────────────────
 async function triggerOverlay(avgScore, riskLevel) {
   try {
-    // ✅ Native system overlay — works outside app
     const { OverlayModule } = NativeModules;
     if (OverlayModule) {
       OverlayModule.showOverlay(avgScore);
-      console.log(
-        `🚨 Native overlay shown → ${riskLevel} (${avgScore.toFixed(2)})`,
-      );
+      console.log(`🚨 Native overlay shown -> ${riskLevel} (${avgScore.toFixed(2)})`);
     } else {
-      console.log(
-        '⚠️ OverlayModule not available — falling back to AsyncStorage',
-      );
+      console.log('⚠️ OverlayModule not available — falling back to AsyncStorage');
     }
-
-    // ✅ AsyncStorage fallback — shows inside app
     await AsyncStorage.setItem(
       OVERLAY_KEY,
       JSON.stringify({
-        show: true,
+        show:       true,
         risk_score: avgScore,
         risk_level: riskLevel,
-        timestamp: new Date().toISOString(),
+        timestamp:  new Date().toISOString(),
       }),
     );
-    console.log(
-      `📲 Overlay trigger saved → ${riskLevel} (${avgScore.toFixed(2)})`,
-    );
+    console.log(`📲 Overlay trigger saved -> ${riskLevel} (${avgScore.toFixed(2)})`);
   } catch (e) {
     console.log('❌ Overlay trigger error:', e);
   }
@@ -230,22 +221,20 @@ export default async function headlessTask({ notification }) {
   if (!notification) return;
 
   try {
-    // 1️⃣ Parse notification
+    // 1 ─ Parse notification
     const parsed =
-      typeof notification === 'string'
-        ? JSON.parse(notification)
-        : notification;
+      typeof notification === 'string' ? JSON.parse(notification) : notification;
 
-    const pkg = parsed.app;
+    const pkg  = parsed.app;
     const text = parsed.text || '';
 
-    // 2️⃣ Whitelist check — only allow whitelisted packages
+    // 2 ─ Whitelist check
     if (!SOCIAL_APP_WHITELIST.includes(pkg)) {
       console.log(`🚫 Ignored (not social): ${pkg}`);
       return;
     }
 
-    // 2️⃣b User toggle check — skip if user turned OFF this app in settings
+    // 2b ─ Load settings and user toggle check
     const { timeWindowMins, minMessages, monitorApps, alertHighRisk } =
       await loadSettings();
     if (monitorApps[pkg] === false) {
@@ -253,73 +242,77 @@ export default async function headlessTask({ notification }) {
       return;
     }
 
-    // 2️⃣c Get real user ID from AsyncStorage (saved by AuthContext on login)
+    // 2c ─ Get user ID
     const userId = await getUserId();
 
-    // 3️⃣ Sanitize
+    // 3 ─ Sanitize
     const cleanedText = sanitizeText(text);
     if (!cleanedText) return;
 
-    // 4️⃣ Filter summaries ("5 new messages" etc.)
+    // 4 ─ Filter summary notifications  (e.g. "5 new messages")
     if (/^\d+\s+new\s+messages?$/i.test(cleanedText)) {
       console.log(`🚫 Filtered summary: "${cleanedText}"`);
       return;
     }
 
-    const appName = APP_NAMES[pkg] || pkg;
-    console.log(`✅ Accepted: [${appName}] → "${cleanedText}"`);
+    // 4b ─ Filter call notifications
+    // Calls have no message content. RoBERTa scores them Neutral ≈ 0.0,
+    // which silently lowers avgScore and understates the real risk level.
+    // We drop them here — before the backend call and before the buffer —
+    // so they never influence the daily score.
+    if (CALL_PATTERN.test(cleanedText)) {
+      console.log(`📵 Filtered call notification: "${cleanedText}"`);
+      return;
+    }
 
-    // 5️⃣ Send to backend with real user ID
+    const appName = APP_NAMES[pkg] || pkg;
+    console.log(`✅ Accepted: [${appName}] -> "${cleanedText}"`);
+
+    // 5 ─ Send to backend
     const result = await analyzeOneMessage(cleanedText, pkg, userId);
     if (!result) return;
 
-    // 6️⃣ Extract score
+    // 6 ─ Extract score
     const label = result.sentiment?.label || 'Neutral';
-    let score = parseFloat(result.sentiment?.negative) / 100 || 0.0;
+    let score   = parseFloat(result.sentiment?.negative) / 100 || 0.0;
     console.log(`🔍 label=${label}, score=${score.toFixed(2)}`);
 
-    // 6b️⃣ Dissonance Override ─────────────────────────────────────────
-    // If emoji dissonance detected → escalate score to HIGH threshold
-    // Ensures sarcastic/masking messages are not ignored by risk system
-    // even when RoBERTa scores them as Positive.
+    // 6b ─ Dissonance Override
+    // Escalates score when emoji masking detected
     // Research: Felbo et al. (2017), Maity et al. (2022)
-    const dissonance = result.dissonance;
-    const dissonanceTypes = dissonance?.dissonance_types || [];
+    const dissonance         = result.dissonance;
+    const dissonanceTypes    = dissonance?.dissonance_types    || [];
     const dissonanceDetected = dissonance?.dissonance_detected === true;
-    const dissonanceRisk = dissonance?.risk_level || 'low';
+    const dissonanceRisk     = dissonance?.risk_level          || 'low';
 
-    if (
-      dissonanceDetected &&
-      (dissonanceRisk === 'high' || dissonanceRisk === 'critical')
-    ) {
+    if (dissonanceDetected && (dissonanceRisk === 'high' || dissonanceRisk === 'critical')) {
       const oldScore = score;
-      score = Math.max(score, 0.75); // above HIGH_THRESHOLD (0.70)
+      score = Math.max(score, 0.75);
       console.log(`⚠️ Dissonance override! ${dissonanceTypes.join(', ')}`);
-      console.log(
-        `   Score: ${oldScore.toFixed(2)} → ${score.toFixed(2)} (escalated)`,
-      );
+      console.log(`   Score: ${oldScore.toFixed(2)} -> ${score.toFixed(2)} (escalated)`);
       if (dissonanceRisk === 'critical') {
-        score = 1.0; // TYPE 5 crisis → always max score
-        console.log(`🚨 CRISIS signal → score forced to 1.0`);
+        score = 1.0;
+        console.log('🚨 CRISIS signal -> score forced to 1.0');
       }
     }
 
-    // 7️⃣ Use already-loaded settings for time window calculation
-    const windowMs = timeWindowMins * 60 * 1000; // convert to milliseconds
+    // 7 ─ Time window
+    const windowMs   = timeWindowMins * 60 * 1000;
     const cutoffTime = Date.now() - windowMs;
 
-    // 8️⃣ Load full buffer from storage
-    const raw = await AsyncStorage.getItem(BUFFER_KEY);
+    // 8 ─ Load buffer
+    const raw  = await AsyncStorage.getItem(BUFFER_KEY);
     let buffer = raw ? JSON.parse(raw) : [];
 
-    // 9️⃣ Add new message to buffer — with deduplication
-    const now = Date.now();
+    // 9 ─ Deduplication
+    // Android fires headless task twice for the same notification
+    const nowMs       = Date.now();
     const isDuplicate = buffer.some(item => {
       const itemTime = new Date(item.time).getTime();
       return (
         item.text === cleanedText &&
-        item.app === pkg &&
-        Math.abs(now - itemTime) < 5000 // same text + same app within 5 seconds
+        item.app  === pkg &&
+        Math.abs(nowMs - itemTime) < 5000
       );
     });
 
@@ -329,22 +322,22 @@ export default async function headlessTask({ notification }) {
     }
 
     buffer.push({
-      app: pkg,
-      text: cleanedText,
+      app:   pkg,
+      text:  cleanedText,
       label,
       score,
-      time: new Date().toISOString(),
+      time:  new Date().toISOString(),
     });
 
-    // 🔟 Trim buffer to MAX_BUFFER_SIZE (keep latest 20)
+    // 10 ─ Trim buffer
     if (buffer.length > MAX_BUFFER_SIZE) {
       buffer = buffer.slice(-MAX_BUFFER_SIZE);
     }
 
-    // 1️⃣1️⃣ Save full buffer back to storage
+    // 11 ─ Save buffer
     await AsyncStorage.setItem(BUFFER_KEY, JSON.stringify(buffer));
 
-    // 1️⃣2️⃣ Filter: only messages within the time window
+    // 12 ─ Filter to active window
     const activeBuffer = buffer.filter(item => {
       const msgTime = new Date(item.time).getTime();
       return msgTime >= cutoffTime && typeof item.score === 'number';
@@ -354,7 +347,7 @@ export default async function headlessTask({ notification }) {
       `🕒 Time window: ${timeWindowMins} mins | Active: ${activeBuffer.length} msgs | Min needed: ${minMessages}`,
     );
 
-    // 1️⃣3️⃣ Not enough messages in window → skip
+    // 13 ─ Not enough messages yet
     if (activeBuffer.length < minMessages) {
       console.log(
         `📥 Not enough recent messages [${activeBuffer.length}/${minMessages}] — waiting...`,
@@ -362,29 +355,20 @@ export default async function headlessTask({ notification }) {
       return;
     }
 
-    // 1️⃣4️⃣ Calculate average score from active window only
-    const scores = activeBuffer.map(item => item.score);
+    // 14 ─ Calculate average score
+    const scores   = activeBuffer.map(item => item.score);
     const avgScore = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-    console.log(
-      `🔢 Scores (active): [${scores.map(s => s.toFixed(2)).join(', ')}]`,
-    );
+    console.log(`🔢 Scores (active): [${scores.map(s => s.toFixed(2)).join(', ')}]`);
 
-    // 1️⃣5️⃣ Determine risk level
+    // 15 ─ Determine risk level
     let riskLevel = 'LOW';
-    if (avgScore >= HIGH_THRESHOLD) riskLevel = 'HIGH';
-    else if (avgScore >= MED_THRESHOLD) riskLevel = 'MODERATE';
+    if      (avgScore >= HIGH_THRESHOLD) riskLevel = 'HIGH';
+    else if (avgScore >= MED_THRESHOLD)  riskLevel = 'MODERATE';
 
-    // 1️⃣6️⃣ Print queue
-    printQueue(
-      activeBuffer,
-      buffer,
-      avgScore,
-      riskLevel,
-      timeWindowMins,
-      minMessages,
-    );
+    // 16 ─ Print queue
+    printQueue(activeBuffer, buffer, avgScore, riskLevel, timeWindowMins, minMessages);
 
-    // 1️⃣7️⃣ Trigger overlay only for HIGH + no cooldown + alertHighRisk enabled
+    // 17 ─ Trigger overlay if HIGH
     if (riskLevel === 'HIGH') {
       const onCooldown = await isCooldownActive();
       if (onCooldown) {
@@ -396,33 +380,31 @@ export default async function headlessTask({ notification }) {
       }
     }
 
-    // 1️⃣8️⃣ Save latest analysis result
-    const analysisData = {
-      activeBuffer,
-      avg_score: avgScore,
-      risk_level: riskLevel,
-      timestamp: new Date().toISOString(),
-      component: 'social_media',
-    };
+    // 18 ─ Save latest analysis to AsyncStorage
     await AsyncStorage.setItem(
       'latest_sm_analysis',
-      JSON.stringify(analysisData),
+      JSON.stringify({
+        activeBuffer,
+        avg_score:  avgScore,
+        risk_level: riskLevel,
+        timestamp:  new Date().toISOString(),
+        component:  'social_media',
+      }),
     );
 
-    // 1️⃣9️⃣ Save daily snapshot — key = "sm_daily_2026-03-06"
-    // Accumulates negative/positive counts for the whole day
-    const todayKey = `sm_daily_${new Date().toISOString().slice(0, 10)}`;
+    // 19 ─ Save daily snapshot using LOCAL date (fixes UTC timezone bug)
+    const todayKey    = `sm_daily_${getLocalDateStr()}`;
     const existingRaw = await AsyncStorage.getItem(todayKey);
-    const existing = existingRaw
+    const existing    = existingRaw
       ? JSON.parse(existingRaw)
       : {
-          date: new Date().toISOString().slice(0, 10),
+          date:          getLocalDateStr(),
           negativeCount: 0,
           positiveCount: 0,
-          neutralCount: 0,
-          totalCount: 0,
+          neutralCount:  0,
+          totalCount:    0,
           highRiskCount: 0,
-          peakAvgScore: 0,
+          peakAvgScore:  0,
           lastRiskLevel: 'LOW',
           lastTimestamp: null,
         };
@@ -435,22 +417,22 @@ export default async function headlessTask({ notification }) {
       ...existing,
       negativeCount: Math.max(existing.negativeCount, negCount),
       positiveCount: Math.max(existing.positiveCount, posCount),
-      neutralCount: Math.max(existing.neutralCount, neuCount),
-      totalCount: Math.max(existing.totalCount, activeBuffer.length),
+      neutralCount:  Math.max(existing.neutralCount,  neuCount),
+      totalCount:    Math.max(existing.totalCount,    activeBuffer.length),
       highRiskCount:
         riskLevel === 'HIGH'
           ? existing.highRiskCount + 1
           : existing.highRiskCount,
-      peakAvgScore: Math.max(existing.peakAvgScore, avgScore),
+      peakAvgScore:  Math.max(existing.peakAvgScore, avgScore),
       lastRiskLevel: riskLevel,
       lastTimestamp: new Date().toISOString(),
     };
+
     await AsyncStorage.setItem(todayKey, JSON.stringify(snapshot));
 
-    console.log(
-      `💾 Saved: risk_score=${avgScore.toFixed(2)}, level=${riskLevel}`,
-    );
+    console.log(`💾 Saved: risk_score=${avgScore.toFixed(2)}, level=${riskLevel}`);
     console.log(`📅 Daily snapshot updated: ${todayKey}`);
+
   } catch (error) {
     console.log('❌ Headless Task Error:', error);
   }

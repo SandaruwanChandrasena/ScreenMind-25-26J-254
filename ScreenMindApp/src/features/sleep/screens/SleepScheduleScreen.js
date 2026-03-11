@@ -22,6 +22,7 @@ import {
   to24Hour,
   clearSettingsCache,
 } from "../services/sleepSettingsService";
+import { scheduleBedtimeReminder } from "../services/sleepWarningService";
 
 // Hour options for picker (1-12)
 const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
@@ -188,6 +189,7 @@ export default function SleepScheduleScreen({ navigation }) {
       });
 
       clearSettingsCache();
+      await scheduleBedtimeReminder();
 
       Alert.alert(
         "Saved ✅",

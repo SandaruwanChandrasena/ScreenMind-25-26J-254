@@ -1,141 +1,183 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, FlatList, Alert } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 
-const STORAGE_KEY = "screenUsageAssessments"; // must match what we use in Questionnaire screen
+import { colors } from "../../../theme/colors";
+import { spacing } from "../../../theme/spacing";
+
+// ✅ Must match QuestionnaireScreen STORAGE_KEY
+const STORAGE_KEY = "screenUsageAssessments";
+
+function safeJsonParse(str, fallback) {
+  try {
+    return JSON.parse(str);
+  } catch {
+    return fallback;
+  }
+}
+
+function formatDateTime(iso) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch {
+    return "";
+  }
+}
 
 export default function PredictionHistoryScreen() {
   const navigation = useNavigation();
   const [items, setItems] = useState([]);
 
-  const loadHistory = useCallback(async () => {
-    try {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      const arr = raw ? JSON.parse(raw) : [];
-      // newest first
-      setItems(Array.isArray(arr) ? arr.slice().reverse() : []);
-    } catch (e) {
-      console.error("LOAD HISTORY ERROR:", e);
-      setItems([]);
-    }
+  const load = useCallback(async () => {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const data = safeJsonParse(raw, []);
+    setItems(Array.isArray(data) ? data : []);
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadHistory();
-    }, [loadHistory])
-  );
+  useEffect(() => {
+    const unsub = navigation.addListener("focus", load);
+    return unsub;
+  }, [navigation, load]);
 
-  async function clearHistory() {
-    Alert.alert("Clear history?", "This will remove all saved assessments from this device.", [
+  const onClear = useCallback(() => {
+    Alert.alert("Clear History", "Remove all saved assessments?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Clear",
         style: "destructive",
         onPress: async () => {
-          try {
-            await AsyncStorage.removeItem(STORAGE_KEY);
-            setItems([]);
-          } catch (e) {
-            console.error("CLEAR HISTORY ERROR:", e);
-          }
+          await AsyncStorage.removeItem(STORAGE_KEY);
+          setItems([]);
         },
       },
     ]);
-  }
+  }, []);
 
-  function openResult(item) {
-    // item should already be serializable (no FieldValue)
-    navigation.navigate("MentalHealthDashboard", { result: item });
-  }
+  // ✅ Header button: Clear only
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={{ flexDirection: "row", gap: 10, marginRight: 10 }}>
+          <Pressable onPress={onClear} style={styles.headerBtnSecondary}>
+            <Text style={styles.headerBtnSecondaryText}>Clear</Text>
+          </Pressable>
+        </View>
+      ),
+    });
+  }, [navigation, onClear]);
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Prediction History</Text>
-
-        <Pressable onPress={clearHistory} style={styles.clearBtn}>
-          <Text style={styles.clearText}>Clear</Text>
-        </Pressable>
-      </View>
+    <View style={styles.root}>
+      <Text style={styles.title}>Prediction History</Text>
 
       {items.length === 0 ? (
-        <View style={styles.emptyBox}>
+        <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No history yet</Text>
           <Text style={styles.emptySub}>Submit an assessment to see it here.</Text>
         </View>
       ) : (
         <FlatList
           data={items}
-          keyExtractor={(item, index) => item?.submittedAt ?? String(index)}
-          contentContainerStyle={{ paddingBottom: 20 }}
+          keyExtractor={(it) => String(it.id || it.submittedAt)}
+          contentContainerStyle={{ paddingBottom: 24 }}
           renderItem={({ item }) => {
-            const phq = item?.phq9?.score ?? "-";
-            const gad = item?.gad7?.score ?? "-";
-            const risk = item?.combinedRisk?.label ?? "-";
-            const date = item?.submittedAt ? new Date(item.submittedAt).toLocaleString() : "";
+            const label = item?.combinedRisk?.label ?? "—";
+            const score = item?.combinedRisk?.score ?? item?.aiPrediction?.score01 ?? "—";
+            const phq = item?.phq9?.score ?? "—";
+            const gad = item?.gad7?.score ?? "—";
+            const time = item?.submittedAt ? formatDateTime(item.submittedAt) : "";
 
             return (
-              <Pressable onPress={() => openResult(item)} style={styles.card}>
-                <Text style={styles.cardTop}>
-                  Risk: <Text style={styles.bold}>{risk}</Text>
-                </Text>
+              <View style={styles.card}>
+                <View style={styles.cardTopRow}>
+                  <Text style={styles.cardTitle}>Risk: {label}</Text>
+                  <Text style={styles.cardScore}>Score: {score}</Text>
+                </View>
 
-                <Text style={styles.line}>PHQ-9: {phq}</Text>
-                <Text style={styles.line}>GAD-7: {gad}</Text>
+                <Text style={styles.cardLine}>PHQ-9: {phq}</Text>
+                <Text style={styles.cardLine}>GAD-7: {gad}</Text>
+                {!!time && <Text style={styles.cardTime}>{time}</Text>}
 
-                {!!date && <Text style={styles.date}>{date}</Text>}
-              </Pressable>
+                <View style={styles.cardActions}>
+                  <Pressable
+                    onPress={() => navigation.navigate("MentalHealthDashboard", { result: item })}
+                    style={styles.smallBtnPrimary}
+                  >
+                    <Text style={styles.smallBtnPrimaryText}>Open</Text>
+                  </Pressable>
+                </View>
+              </View>
             );
           }}
         />
       )}
 
       <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-        <Text style={styles.backText}>Back</Text>
+        <Text style={styles.backBtnText}>Back</Text>
       </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  root: { flex: 1, backgroundColor: colors.bg1, padding: spacing.lg },
+  title: { fontSize: 20, fontWeight: "900", marginBottom: spacing.md, color: colors.text },
 
-  title: { fontSize: 20, fontWeight: "900" },
-
-  clearBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  headerBtnSecondary: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.06)",
     borderWidth: 1,
-    borderColor: "#ccc",
+    borderColor: colors.border,
   },
-  clearText: { fontWeight: "800" },
+  headerBtnSecondaryText: { fontWeight: "900", color: colors.text },
 
-  emptyBox: { marginTop: 30, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: "#ddd" },
-  emptyTitle: { fontWeight: "900", fontSize: 16 },
-  emptySub: { marginTop: 6, color: "#666" },
+  emptyCard: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    padding: 14,
+    backgroundColor: colors.card,
+  },
+  emptyTitle: { fontWeight: "900", marginBottom: 4, color: colors.text },
+  emptySub: { color: colors.muted },
 
   card: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: colors.border,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    backgroundColor: colors.card,
   },
-  cardTop: { fontWeight: "900", marginBottom: 6 },
-  bold: { fontWeight: "900" },
-  line: { color: "#333", marginTop: 2 },
-  date: { marginTop: 8, color: "#666", fontSize: 12, fontWeight: "700" },
+  cardTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  cardTitle: { fontWeight: "900", marginBottom: 6, color: colors.text },
+  cardScore: { fontWeight: "800", color: colors.faint },
+
+  cardLine: { color: colors.muted, marginBottom: 2, fontWeight: "700" },
+  cardTime: { marginTop: 6, color: colors.faint, fontSize: 12, fontWeight: "700" },
+
+  cardActions: { flexDirection: "row", gap: 10, marginTop: 12 },
+
+  smallBtnPrimary: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    alignItems: "center",
+    backgroundColor: "rgba(124,58,237,0.85)",
+  },
+  smallBtnPrimaryText: { color: "#fff", fontWeight: "900" },
 
   backBtn: {
-    marginTop: 12,
+    marginTop: 10,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     alignItems: "center",
-    backgroundColor: "#444",
+    backgroundColor: "rgba(59,130,246,0.35)",
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  backText: { color: "white", fontWeight: "900" },
+  backBtnText: { color: colors.text, fontWeight: "900" },
 });

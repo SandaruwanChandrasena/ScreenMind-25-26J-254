@@ -31,6 +31,7 @@ import {
   TIME_WINDOW_OPTIONS,
   MESSAGE_COUNT_OPTIONS,
 } from '../services/smSettings.service';
+import SMJournalReminderCard from '../components/SMJournalReminderCard';
 
 const BUFFER_KEY = 'sm_message_buffer';
 
@@ -104,7 +105,10 @@ export default function SMNotificationAnalysisScreen() {
     return Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        '0',
+      )}-${String(d.getDate()).padStart(2, '0')}`;
       const label =
         i === 0
           ? 'Today'
@@ -212,7 +216,10 @@ export default function SMNotificationAnalysisScreen() {
           }
 
           // ── TODAY FULL DAY: always load from Firebase ─────────────
-          const todayStr = new Date().toISOString().slice(0, 10);
+          const n2 = new Date();
+          const todayStr = `${n2.getFullYear()}-${String(
+            n2.getMonth() + 1,
+          ).padStart(2, '0')}-${String(n2.getDate()).padStart(2, '0')}`;
           const fbData = await fetchDailySummary(todayStr);
           if (fbData) {
             negativeCount = fbData.negativeCount;
@@ -481,6 +488,21 @@ export default function SMNotificationAnalysisScreen() {
   };
 
   // ── Reset Cooldown ─────────────────────────────────────────────
+  // ── Journal Reminder Handlers ────────────────────────────────
+  const handleJournalReminderToggle = async value => {
+    setDailyJournalReminder(value);
+    await saveAlertSettings({ dailyJournalReminder: value });
+    if (!value) {
+      setJournalReminderInterval(null);
+      await saveAlertSettings({ journalReminderInterval: null });
+    }
+  };
+
+  const handleIntervalSelect = async key => {
+    setJournalReminderInterval(key);
+    await saveAlertSettings({ journalReminderInterval: key });
+  };
+
   const handleResetCooldown = async () => {
     try {
       await AsyncStorage.removeItem('sm_alert_cooldown');
@@ -492,71 +514,6 @@ export default function SMNotificationAnalysisScreen() {
     }
   };
 
-  // ── Journal Reminder ───────────────────────────────────────────
-  const scheduleJournalReminder = async intervalKey => {
-    try {
-      // Cancel any existing reminder first
-      await cancelJournalReminder();
-
-      const option = INTERVAL_OPTIONS.find(o => o.key === intervalKey);
-      if (!option) return;
-
-      // Create notification channel
-      const channelId = await notifee.createChannel({
-        id: 'journal_reminder',
-        name: 'Journal Reminder',
-      });
-
-      // Schedule trigger notification
-      const triggerTime = Date.now() + option.ms;
-      await notifee.createTriggerNotification(
-        {
-          id: 'journal_reminder',
-          title: '📓 Time to Journal',
-          body: 'Take a moment to reflect on your day. How are you feeling? 💙',
-          android: {
-            channelId,
-            smallIcon: 'ic_launcher',
-            pressAction: { id: 'default' },
-          },
-        },
-        {
-          type: TriggerType.TIMESTAMP,
-          timestamp: triggerTime,
-        },
-      );
-
-      // Save interval preference
-      setJournalReminderInterval(intervalKey);
-      await saveAlertSettings({ journalReminderInterval: intervalKey });
-      console.log(`📓 Journal reminder scheduled → ${option.label}`);
-    } catch (e) {
-      console.log('❌ Schedule reminder error:', e);
-    }
-  };
-
-  const cancelJournalReminder = async () => {
-    try {
-      await notifee.cancelNotification('journal_reminder');
-      console.log('📓 Journal reminder cancelled');
-    } catch (e) {}
-  };
-
-  const handleJournalReminderToggle = async value => {
-    setDailyJournalReminder(value);
-    await saveAlertSettings({ dailyJournalReminder: value });
-    if (!value) {
-      // Turned OFF — cancel reminder and clear interval
-      await cancelJournalReminder();
-      setJournalReminderInterval(null);
-      await saveAlertSettings({ journalReminderInterval: null });
-    }
-  };
-
-  const handleIntervalSelect = async key => {
-    setJournalReminderInterval(key);
-    await scheduleJournalReminder(key);
-  };
   const [overlayPermission, setOverlayPermission] = useState(false);
 
   useEffect(() => {
@@ -1018,74 +975,26 @@ export default function SMNotificationAnalysisScreen() {
                   console.log(`🔔 Alert High Risk: ${v}`);
                 }}
               />
+            </View>
+
+            {/* ── Journal Reminder Component ── */}
+            <View style={{ height: spacing.md }} />
+            <View style={styles.settingsCard}>
               <SettingRow
                 title="Daily Journal Reminder"
                 subtitle="Gentle daily prompt to reflect"
                 value={dailyJournalReminder}
                 onChange={handleJournalReminderToggle}
               />
+              <SMJournalReminderCard
+                enabled={dailyJournalReminder}
+                intervalKey={journalReminderInterval}
+                onIntervalChange={handleIntervalSelect}
+              />
+            </View>
 
-              {/* ── Journal Reminder Interval Picker ── */}
-              {dailyJournalReminder && (
-                <View style={styles.journalPickerBox}>
-                  <Text style={styles.settingTitle}>Remind me after</Text>
-                  <Text style={styles.settingSub}>
-                    Choose when to receive your journal reminder.
-                  </Text>
-                  <View style={styles.pillRow}>
-                    {INTERVAL_OPTIONS.map(opt => (
-                      <TouchableOpacity
-                        key={opt.key}
-                        style={[
-                          styles.journalPill,
-                          journalReminderInterval === opt.key &&
-                            styles.journalPillActive,
-                        ]}
-                        onPress={() => handleIntervalSelect(opt.key)}
-                      >
-                        <Text
-                          style={[
-                            styles.journalPillText,
-                            journalReminderInterval === opt.key &&
-                              styles.journalPillTextActive,
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.journalPillSub,
-                            journalReminderInterval === opt.key && {
-                              color: '#22C55E',
-                            },
-                          ]}
-                        >
-                          {opt.display}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {journalReminderInterval && (
-                    <View style={styles.journalScheduledBadge}>
-                      <Text style={styles.journalScheduledText}>
-                        ✅ Reminder set —{' '}
-                        <Text style={{ color: '#22C55E', fontWeight: '900' }}>
-                          {
-                            INTERVAL_OPTIONS.find(
-                              o => o.key === journalReminderInterval,
-                            )?.label
-                          }
-                        </Text>{' '}
-                        from now
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              <View style={styles.divider} />
-
+            <View style={{ height: spacing.md }} />
+            <View style={styles.settingsCard}>
               {/* ── Alert Threshold ── */}
               <Text style={styles.groupTitle}>Alert Threshold</Text>
               <Text style={styles.groupSub}>

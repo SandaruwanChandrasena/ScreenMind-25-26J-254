@@ -88,7 +88,8 @@ cd ScreenMind-25-26J-254/backend-python
 
 ### Step 2 — Create your virtual environment
 ```powershell
-python -m venv .venv
+python -m venv .venv 
+py -3.13 -m venv .venv
 ```
 
 ---

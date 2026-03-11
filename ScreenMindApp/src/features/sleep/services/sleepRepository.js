@@ -151,6 +151,38 @@ export async function logScreenEvent({ userId = null, sessionId = null, eventTyp
 }
 
 /**
+ * Determine whether the device screen is currently ON based on the latest
+ * tracked screen event in SQLite.
+ */
+export async function isScreenCurrentlyOn(maxAgeMs = 10 * 60 * 1000) {
+  const db = await getDB();
+
+  const rs = await exec(
+    db,
+    `SELECT event_type, ts
+     FROM screen_events
+     WHERE event_type IN ('ON', 'OFF', 'UNLOCK')
+     ORDER BY ts DESC
+     LIMIT 1;`,
+    []
+  );
+
+  if (rs.rows.length === 0) {
+    return false;
+  }
+
+  const lastEvent = rs.rows.item(0);
+  const ageMs = Date.now() - Number(lastEvent.ts ?? 0);
+
+  // If state is stale, treat it as unknown/off to avoid ghost notifications.
+  if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > maxAgeMs) {
+    return false;
+  }
+
+  return lastEvent.event_type === 'ON' || lastEvent.event_type === 'UNLOCK';
+}
+
+/**
  * Insert notification event
  */
 // export async function logNotificationEvent({
@@ -289,6 +321,23 @@ export async function saveMorningCheckIn({
   );
 
   return true;
+}
+
+/**
+ * Get the most recent morning check-in for a session.
+ * Returns the row object or null.
+ */
+export async function getMorningCheckInForSession(sessionId) {
+  const db = await getDB();
+  const rs = await exec(
+    db,
+    `SELECT * FROM morning_checkins
+     WHERE session_id = ?
+     ORDER BY ts DESC
+     LIMIT 1;`,
+    [sessionId]
+  );
+  return rs.rows.length ? rs.rows.item(0) : null;
 }
 
 /**
