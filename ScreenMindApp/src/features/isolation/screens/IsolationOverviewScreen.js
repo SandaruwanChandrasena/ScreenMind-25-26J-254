@@ -19,6 +19,7 @@ import {
 } from "../services/isolationStorage";
 import { collectRealFeatures } from "../services/isolationCollector";
 import { checkAllPermissions } from "../services/permissionHelper";
+import { computeIsolationRisk } from "../services/isolationScoring";
 
 // ── NEW: import the API caller (falls back to local scorer if backend is down)
 import { fetchIsolationRiskWithFallback } from "../services/isolationApi";
@@ -139,15 +140,19 @@ export default function IsolationOverviewScreen({ navigation }) {
 
       // 7) Normalise result into the same shape the rest of the UI expects
       //    (backend returns slightly different field names from local scorer)
+      const normalisedScore = Math.max(0, Math.min(100, Math.round(Number(result.score) || 0)));
+      // Backend ML response currently does not always include reasons/suggestions.
+      // Build local explainability data so downstream screens always have content.
+      const localExplain = computeIsolationRisk(todayFeatures, storedPrefs);
       const normalisedRisk = {
-        score:        result.score,
-        label:        result.label,
+        score:        normalisedScore,
+        label:        labelFromRiskScore(normalisedScore),
         breakdown:    normaliseBreakdown(result.breakdown),
-        used:         result.used_pillars ?? result.used ?? [],
-        reasons:      result.reasons      ?? [],
-        suggestions:  result.suggestions  ?? [],
-        socialItems:  result.socialItems  ?? [],
-        withdrawItems:result.withdrawItems?? [],
+        used:         result.used_pillars ?? result.used ?? localExplain.used ?? [],
+        reasons:      result.reasons?.length ? result.reasons : (localExplain.reasons ?? []),
+        suggestions:  result.suggestions?.length ? result.suggestions : (localExplain.suggestions ?? []),
+        socialItems:  result.socialItems?.length ? result.socialItems : (localExplain.socialItems ?? []),
+        withdrawItems:result.withdrawItems?.length ? result.withdrawItems : (localExplain.withdrawItems ?? []),
       };
       setRisk(normalisedRisk);
 
@@ -390,6 +395,12 @@ function scoreLevel(value, max) {
   if (ratio >= 0.67) return "High";
   if (ratio >= 0.34) return "Medium";
   return "Low";
+}
+
+function labelFromRiskScore(score) {
+  if (score <= 33) return "Low";
+  if (score <= 66) return "Moderate";
+  return "High";
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────

@@ -26,10 +26,9 @@ export default function GaugeRing({ score = 0, label = "Low", size = 180 }) {
 
   // Determine color based on score
   const getColor = (val) => {
-    if (val < 25) return { start: "#10b981", end: "#34d399", name: "green" }; // Green
-    if (val < 50) return { start: "#f59e0b", end: "#fbbf24", name: "yellow" }; // Yellow
-    if (val < 75) return { start: "#f87171", end: "#fca5a5", name: "lightred" }; // Light Red
-    return { start: "#dc2626", end: "#991b1b", name: "darkred" }; // Dark Red
+  if (val <= 33) return { start: "#10b981", end: "#34d399", name: "green" }; // Low
+    if (val <= 66) return { start: "#f59e0b", end: "#fbbf24", name: "yellow" }; // Moderate
+    return { start: "#dc2626", end: "#991b1b", name: "red" }; // High
   };
 
   const colorScheme = getColor(score);

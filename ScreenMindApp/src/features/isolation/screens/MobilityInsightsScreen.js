@@ -129,7 +129,7 @@ export default function MobilityInsightsScreen() {
             value={formatDistance(gpsFeatures?.dailyDistanceMeters)} 
           />
           <Row 
-            label="Time at home" 
+            label="Time at Primary Location" 
             value={formatTimeAtHome(gpsFeatures?.timeAtHomePct)} 
           />
           <Row 

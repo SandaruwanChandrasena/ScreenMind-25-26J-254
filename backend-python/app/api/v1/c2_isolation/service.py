@@ -66,7 +66,6 @@ def predict_isolation_risk(daily_records: list[dict]) -> dict:
     COMM_FEAT = config["communication_features"]
     BEH_FEAT  = config["behaviour_features"]
     PROX_FEAT = config["proximity_features"]
-    CLASSES   = config["class_names"]          # ["Low","Moderate","High"]
 
     if len(daily_records) < WINDOW:
         raise ValueError(
@@ -103,13 +102,11 @@ def predict_isolation_risk(daily_records: list[dict]) -> dict:
         verbose=0
     )[0]  # shape (3,)
 
-    predicted_class = int(np.argmax(proba))
-    label           = CLASSES[predicted_class]
-
     # Map probability to 0-100 score (weighted by class severity)
     # Low=0, Moderate=50, High=100 centre points
     score = int(round(proba[0] * 16 + proba[1] * 50 + proba[2] * 84))
     score = max(0, min(100, score))
+    label = _label_from_score(score)
 
     # ── Per-pillar breakdown (simple: run rule-based sub-score) ──────────
     last = window_records[-1]   # use most recent day for breakdown
@@ -126,6 +123,14 @@ def predict_isolation_risk(daily_records: list[dict]) -> dict:
         "breakdown":     breakdown,
         "used_pillars":  ["mobility", "communication", "behaviour", "proximity"],
     }
+
+
+def _label_from_score(score: int) -> str:
+    if score <= 33:
+        return "Low"
+    if score <= 66:
+        return "Moderate"
+    return "High"
 
 
 def _pillar_breakdown(rec: dict, mob, comm, beh, prox) -> dict:
