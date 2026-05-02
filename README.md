@@ -19,9 +19,9 @@ The primary purpose of this research is to **identify and predict the negative i
 
 - Detect early signs of smartphone addiction-related mental health risks  
 - Predict potential mental health deterioration using machine learning and deep learning models  
-- Support preventive interventions to improve users’ overall mental well-being and daily functioning  
+- Support preventive interventions to improve users' overall mental well-being and daily functioning  
 
-A core focus of **ScreenMind** is **early intervention**. Rather than waiting for users to seek clinical or professional mental health support, ScreenMind functions as a **“Digital Guardian”** that continuously monitors behavioral patterns and identifies correlations between digital habits and mental well-being. This empowers users to recognize harmful usage trends early and take corrective action **before clinical intervention becomes necessary**.
+A core focus of **ScreenMind** is **early intervention**. Rather than waiting for users to seek clinical or professional mental health support, ScreenMind functions as a **"Digital Guardian"** that continuously monitors behavioral patterns and identifies correlations between digital habits and mental well-being. This empowers users to recognize harmful usage trends early and take corrective action **before clinical intervention becomes necessary**.
 
 ---
 
@@ -211,8 +211,19 @@ ScreenMind/
 ├── backend-python/       # 🧠 AI/ML Inference Service
 ├── .gitignore            # Configuration
 └── README.md             # Documentation
-
 ```
+
+---
+
+## 👥 Team & Components
+
+| Member | Component | Folder |
+|---|---|---|
+| C1 Member | Screen Logs | `app/api/v1/c1_screenlogs/` |
+| C2 Member | Isolation / GPS | `app/api/v1/c2_isolation/` |
+| C3 Member | Sleep Tracking | `app/api/v1/c3_sleep/` |
+| C4 Member (Leader) | Social Media NLP | `app/api/v1/c4_social_media/` |
+
 ---
 
 ## ▶️ How to Run the Project
@@ -278,6 +289,201 @@ The backend will run at:
 ```
 http://localhost:3000
 ```
+
+---
+
+### 🤖 3. Run the Python AI Backend (backend-python)
+
+---
+
+## ⚠️ Before You Start — Files You Need From The Leader
+
+These files are **secret** and will never be on GitHub.  
+Ask the **project leader** to send these to you privately (WhatsApp / Email):
+
+```
+✅ firebase_service_account.json
+```
+
+Place this file directly inside the `backend-python/` folder once you receive it.
+
+---
+
+## 🤖 Model Setup — Download Fine-tuned AI Model
+
+> ⚠️ The AI model is NOT included in GitHub (too large — 440MB).  
+> You must download it manually from Google Drive.
+
+### Step 1 — Download the model folder
+Download the `ScreenMind_model` folder from Google Drive:
+
+```
+https://drive.google.com/drive/folders/ScreenMind_model
+```
+> 📌 Ask the project leader for the exact Google Drive link.
+
+---
+
+### Step 2 — Place the model in the correct folder
+
+After downloading, extract and place the folder here:
+
+```
+backend-python/
+└── app/
+    └── api/
+        └── v1/
+            └── c4_social_media/
+                └── nlp/
+                    └── ScreenMind_model/   ← place HERE
+                        ├── config.json
+                        ├── model.safetensors
+                        ├── tokenizer_config.json
+                        └── tokenizer.json
+```
+
+✅ Your `nlp/` folder should look like this in VS Code:
+```
+nlp/
+├── ScreenMind_model/
+│   ├── config.json
+│   ├── model.safetensors
+│   ├── tokenizer_config.json
+│   └── tokenizer.json
+├── emoji_masking.py
+└── roberta_model.py
+```
+
+---
+
+## 🚀 Setup — Step by Step
+
+### Step 1 — Clone the repository
+```powershell
+git clone https://github.com/SandaruwanChandrasena/ScreenMind-25-26J-254.git
+cd ScreenMind-25-26J-254/backend-python
+```
+
+---
+
+### Step 2 — Create your virtual environment
+```powershell
+python -m venv .venv 
+py -3.13 -m venv .venv
+```
+
+---
+
+### Step 3 — Activate the virtual environment
+
+**Windows PowerShell:**
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+**Mac / Linux:**
+```bash
+source .venv/bin/activate
+```
+
+✅ You should see `(.venv)` at the start of your terminal.
+
+---
+
+### Step 4 — Install all packages
+```powershell
+pip install -r requirements.txt
+```
+
+---
+
+### Step 5 — Create your `.env` file
+
+Create a new file called `.env` inside the `backend-python/` folder and paste this:
+
+```env
+FIREBASE_CREDENTIAL_PATH=firebase_service_account.json
+```
+
+---
+
+### Step 6 — Place the Firebase JSON file
+
+Put the `firebase_service_account.json` file (received from the leader) inside `backend-python/`:
+
+```
+backend-python/
+├── .env                          ✅ you created this
+├── firebase_service_account.json ✅ received from leader
+├── requirements.txt
+└── app/
+```
+
+---
+
+### Step 7 — Start the server
+```powershell
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+✅ You should see:
+```
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process
+⏳ Loading your fine-tuned ScreenMind model...
+✅ ScreenMind model loaded successfully!
+INFO:     Application startup complete.
+```
+
+---
+
+### Step 8 — Verify the server is running
+
+Open your browser and go to:
+```
+http://localhost:8000
+```
+
+You should see:
+```json
+{
+  "status": "success",
+  "message": "ScreenMind Backend is online and ready for the team!"
+}
+```
+
+Also check the interactive API docs at:
+```
+http://localhost:8000/docs
+```
+
+---
+
+## 🗂️ Full Project Structure
+
+```
+backend-python/
+├── .env                              ← Secret (never on GitHub)
+├── firebase_service_account.json     ← Secret (never on GitHub)
+├── requirements.txt                  ← All packages listed here
+└── app/
+    ├── main.py                       ← Server entry point
+    ├── core/
+    │   └── config.py                 ← Firebase + environment config
+    └── api/
+        └── v1/
+            ├── router.py             ← Registers all component routes
+            ├── c1_screenlogs/        ← C1 Member's folder
+            ├── c2_isolation/         ← C2 Member's folder
+            ├── c3_sleep/             ← C3 Member's folder
+            ├── c4_social_media/      ← C4 Leader's folder
+            │   └── nlp/
+            │       ├── ScreenMind_model/  ← Download from Google Drive
+            │       ├── roberta_model.py
+            │       └── emoji_masking.py
+            └── fusion/               ← Final score combination
+```
+
 ---
 
 ## 🔐 Privacy & Ethical Considerations
@@ -314,6 +520,3 @@ http://localhost:3000
 ## 📄 License
 
 This project is intended for **academic and research purposes only**.
-
----
-
