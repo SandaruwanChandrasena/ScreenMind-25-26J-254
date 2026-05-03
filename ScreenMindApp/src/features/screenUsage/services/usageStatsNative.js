@@ -2,10 +2,6 @@ import { NativeModules, Platform } from 'react-native';
 
 const { UsageStatsModule } = NativeModules;
 
-// ─────────────────────────────────────────────────────────────
-// MOCK DATA — auto-used on emulator or when native returns empty
-// Reflects a realistic day of phone usage for testing/dev
-// ─────────────────────────────────────────────────────────────
 const MOCK_USAGE_DATA = [
   { packageName: 'com.instagram.android', totalTimeInForeground: 42 * 60000 },
   {
