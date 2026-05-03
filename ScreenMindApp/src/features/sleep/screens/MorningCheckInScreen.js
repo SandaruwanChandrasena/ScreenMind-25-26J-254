@@ -22,6 +22,8 @@ import {
   getMorningCheckInForSession,
 } from "../services/sleepRepository";
 
+import { syncSleepSessionToFirebase } from "../services/sleepFirebaseSync";
+
 // ─── helpers ────────────────────────────────────────────────────────────────
 
 function formatTime(date) {
@@ -323,6 +325,13 @@ export default function MorningCheckInScreen({ navigation }) {
         wokeUp, headache, dryMouth, snoreUsed,
         ts: Date.now(),
       });
+
+      try {
+        await syncSleepSessionToFirebase(session.id);
+      } catch (syncError) {
+        console.log("Morning check-in Firebase sync error:", syncError);
+      }
+
       Alert.alert(
         "Saved ✅",
         "Morning check-in saved! Your sleep score has been updated.",
