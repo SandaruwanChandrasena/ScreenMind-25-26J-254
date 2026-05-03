@@ -302,6 +302,8 @@ export async function getSessionSensorSamples(sessionId) {
 export async function saveMorningCheckIn({
   userId = null,
   sessionId = null,
+  sleepStartedAt = null,
+  wakeTime = null,
   sleepQuality,
   refreshed,
   wokeUp,
@@ -315,9 +317,9 @@ export async function saveMorningCheckIn({
   await exec(
     db,
     `INSERT INTO morning_checkins
-     (user_id, session_id, sleep_quality, refreshed, woke_up, headache, dry_mouth, snore_used, ts)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [userId, sessionId, sleepQuality, refreshed, wokeUp, headache, dryMouth, snoreUsed, ts]
+     (user_id, session_id, sleep_started_at, wake_time, sleep_quality, refreshed, woke_up, headache, dry_mouth, snore_used, ts)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+    [userId, sessionId, sleepStartedAt, wakeTime, sleepQuality, refreshed, wokeUp, headache, dryMouth, snoreUsed, ts]
   );
 
   return true;
@@ -459,9 +461,9 @@ export async function getSessionSummary(sessionId) {
     [sessionId]
   );
 
-  // Get charging events
+  // Get charging events from the charging_events table
   const chargingRS = await exec(db,
-    `SELECT ts FROM screen_events 
+    `SELECT ts FROM charging_events 
      WHERE session_id = ? AND event_type = 'CHARGING_START'
      ORDER BY ts ASC LIMIT 1;`,
     [sessionId]

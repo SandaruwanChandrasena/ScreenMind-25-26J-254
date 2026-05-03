@@ -51,22 +51,24 @@
 
 // Weights (must sum to 1.0)
 const WEIGHTS = {
-  LST: 0.30,  // Late screen time - most important
-  SI:  0.20,  // Sleep interruptions
-  NU:  0.15,  // Notification response
-  SMU: 0.20,  // Social media usage
+  LST: 0.25,  // Late screen time - most important
+  SI:  0.18,  // Sleep interruptions
+  NU:  0.12,  // Notification response
+  SMU: 0.15,  // Social media usage
   SR:  0.10,  // Snoring
   RS:  0.05,  // Restlessness
+  DUR: 0.15,  // Short total sleep duration
 };
 
 // Weights when snoring is disabled (redistribute SR weight)
 const WEIGHTS_NO_SNORE = {
-  LST: 0.33,
-  SI:  0.22,
-  NU:  0.17,
-  SMU: 0.22,
+  LST: 0.27,
+  SI:  0.19,
+  NU:  0.14,
+  SMU: 0.20,
   SR:  0.00,
-  RS:  0.06,
+  RS:  0.05,
+  DUR: 0.15,
 };
 
 function clamp(value, min = 0, max = 100) {
@@ -127,6 +129,20 @@ function calcRS(restlessnessPercent) {
 }
 
 /**
+ * DUR: Short total sleep duration score
+ * Higher when the session length is short.
+ * Reference: 8 hours should be low risk; 4 hours or less should be high risk.
+ */
+function calcDUR(durationHours) {
+  if (!Number.isFinite(durationHours) || durationHours <= 0) {
+    return 100;
+  }
+
+  const shortfallHours = Math.max(0, 8 - durationHours);
+  return clamp((shortfallHours / 4) * 100);
+}
+
+/**
  * Subjective adjustment from morning check-in
  * Combines sensor data (70%) with user feeling (30%)
  */
@@ -145,6 +161,14 @@ function applySubjectiveAdjustment(riskScore, checkIn) {
   return clamp(Math.round(finalScore));
 }
 
+function applyMinimumDurationFloor(score, durationHours) {
+  if (!Number.isFinite(durationHours) || durationHours <= 4) {
+    return Math.max(score, 34);
+  }
+
+  return score;
+}
+
 /**
  * Main scoring function
  * Call this with summary data from getSessionSummary()
@@ -158,7 +182,10 @@ export function computeDisruptionScore(summary, options = {}) {
     respondedNightNotifs = 0,
   } = options;
 
-  const durationHours = (summary.durationMs ?? 0) / (1000 * 60 * 60);
+  const correctedDurationMs = summary.checkIn?.sleep_started_at && summary.checkIn?.wake_time
+    ? Math.max(0, Number(summary.checkIn.wake_time) - Number(summary.checkIn.sleep_started_at))
+    : (summary.durationMs ?? 0);
+  const durationHours = correctedDurationMs / (1000 * 60 * 60);
 
   // Calculate screen time after 10PM
   // Using screenOnCount as proxy (each screen-on ≈ 8 min average)
@@ -174,6 +201,7 @@ export function computeDisruptionScore(summary, options = {}) {
   const SMU = calcSMU(socialMediaMinsAfter10PM);
   const SR  = snoringEnabled ? calcSR(snoringDurationMins) : 0;
   const RS  = calcRS(restlessnessPercent);
+  const DUR = calcDUR(durationHours);
 
   // Select weights based on snoring availability
   const W = snoringEnabled ? WEIGHTS : WEIGHTS_NO_SNORE;
@@ -185,7 +213,8 @@ export function computeDisruptionScore(summary, options = {}) {
     (W.NU  * NU)  +
     (W.SMU * SMU) +
     (W.SR  * SR)  +
-    (W.RS  * RS);
+    (W.RS  * RS)  +
+    (W.DUR * DUR);
 
   riskScore = Math.round(clamp(riskScore));
 
@@ -194,15 +223,16 @@ export function computeDisruptionScore(summary, options = {}) {
     riskScore, 
     summary.checkIn
   );
+  const flooredScore = applyMinimumDurationFloor(finalScore, durationHours);
 
   // Determine risk category
   let risk = "Low";
-  if (finalScore >= 67) risk = "High";
-  else if (finalScore >= 34) risk = "Medium";
+  if (flooredScore >= 67) risk = "High";
+  else if (flooredScore >= 34) risk = "Medium";
 
   // Build explanation (for dashboard display)
   const reasons = buildReasons({
-    LST, SI, NU, SMU, SR, RS,
+    LST, SI, NU, SMU, SR, RS, DUR,
     screenTimeMins,
     unlockCount: summary.unlockCount,
     notifCount: summary.notifCount,
@@ -218,19 +248,20 @@ export function computeDisruptionScore(summary, options = {}) {
     "Social Media": Math.round(W.SMU * SMU),
     "Snoring": Math.round(W.SR * SR),
     "Restlessness": Math.round(W.RS * RS),
+    "Duration": Math.round(W.DUR * DUR),
   };
 
   return { 
-    score: finalScore, 
+    score: flooredScore, 
     risk, 
     reasons,
     breakdown,
-    components: { LST, SI, NU, SMU, SR, RS },
+    components: { LST, SI, NU, SMU, SR, RS, DUR },
   };
 }
 
 function buildReasons({
-  LST, SI, NU, SMU, SR, RS,
+    LST, SI, NU, SMU, SR, RS, DUR,
   screenTimeMins, unlockCount, notifCount,
   snoringDurationMins, durationHours,
 }) {
@@ -254,7 +285,10 @@ function buildReasons({
   if (RS > 60) reasons.push(
     "High movement detected during sleep window"
   );
-  if (durationHours < 6) reasons.push(
+  if (durationHours <= 0) reasons.push(
+    "No valid sleep duration recorded"
+  );
+  else if (durationHours < 4) reasons.push(
     `Short sleep duration (${durationHours.toFixed(1)} hours)`
   );
 

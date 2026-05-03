@@ -84,20 +84,71 @@ function SummaryItem({ label, value, highlight }) {
   );
 }
 
-function MiniBarChart({ title, data }) {
+function getRiskBarColor(value) {
+  if (value >= 7) return "rgba(239,68,68,0.85)";
+  if (value >= 4) return "rgba(245,158,11,0.85)";
+  return "rgba(34,197,94,0.85)";
+}
+
+function getTrendRiskLabel(value) {
+  if (value >= 7) return "High disruption";
+  if (value >= 4) return "Medium disruption";
+  return "Low disruption";
+}
+
+function MiniBarChart({ title, data, selectedId, onSelect }) {
   return (
     <Card>
       <SectionHeader icon="📈" title={title} sub="Higher bars = more disruption" />
       <View style={styles.barRow}>
         {data.map((d) => (
-          <View key={d.id} style={styles.barItem}>
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { height: `${Math.min(100, (d.value / 10) * 100)}%` }]} />
+          <Pressable key={d.id} style={styles.barItem} onPress={() => onSelect?.(d.id)}>
+            <View
+              style={[
+                styles.barTrack,
+                selectedId === d.id && styles.barTrackSelected,
+              ]}
+            >
+              <View
+                style={[
+                  styles.barFill,
+                  {
+                    height: `${Math.min(100, (d.value / 10) * 100)}%`,
+                    backgroundColor: getRiskBarColor(d.value),
+                  },
+                ]}
+              />
             </View>
             <Text style={styles.barLabel}>{d.label}</Text>
-          </View>
+            <Text style={styles.barHint}>{d.shortLabel}</Text>
+          </Pressable>
         ))}
       </View>
+    </Card>
+  );
+}
+
+function TrendDetailCard({ trend }) {
+  if (!trend) return null;
+
+  return (
+    <Card style={{ marginTop: spacing.md }}>
+      <SectionHeader
+        icon="🧭"
+        title={`Trend details: ${trend.label}`}
+        sub={trend.detail}
+      />
+      <View style={styles.trendDetailRow}>
+        <View style={styles.trendDetailBadge}>
+          <Text style={styles.trendDetailBadgeLabel}>Disruption</Text>
+          <Text style={styles.trendDetailBadgeValue}>{trend.value}/10</Text>
+        </View>
+        <View style={styles.trendDetailBadge}>
+          <Text style={styles.trendDetailBadgeLabel}>Risk band</Text>
+          <Text style={styles.trendDetailBadgeValue}>{trend.riskLabel}</Text>
+        </View>
+      </View>
+      <Text style={styles.trendDetailText}>{trend.explanation}</Text>
     </Card>
   );
 }
@@ -241,6 +292,7 @@ export default function SleepDetailsScreen({ route, navigation }) {
   const [sessionId, setSessionId] = useState(passedSessionId);
   const [weeklyData, setWeeklyData] = useState([]);
   const [period, setPeriod] = useState('day'); // 'day', 'week', 'month'
+  const [selectedTrendId, setSelectedTrendId] = useState(null);
 
   async function loadDetails() {
     setLoading(true);
@@ -295,9 +347,24 @@ export default function SleepDetailsScreen({ route, navigation }) {
     loadDetails();
   }, [passedSessionId]);
 
+  useEffect(() => {
+    if (!ui?.bars?.length) {
+      setSelectedTrendId(null);
+      return;
+    }
+
+    const selectedExists = ui.bars.some(bar => bar.id === selectedTrendId);
+    if (!selectedExists) {
+      setSelectedTrendId(ui.bars[0].id);
+    }
+  }, [ui?.bars, selectedTrendId]);
+
   const ui = useMemo(() => {
     if (!summary && period === 'day') return null;
     if (period !== 'day' && weeklyData.length === 0) return null;
+
+    const checkInStart = period === 'day' ? checkIn?.sleep_started_at ?? null : null;
+    const checkInWake = period === 'day' ? checkIn?.wake_time ?? null : null;
 
     // Aggregate data based on period
     let aggregatedData;
@@ -330,8 +397,14 @@ export default function SleepDetailsScreen({ route, navigation }) {
       };
     }
 
-    const durationMs = aggregatedData.durationMs ?? 0;
+    const durationMs = period === 'day' && checkInStart && checkInWake
+      ? Math.max(0, checkInWake - checkInStart)
+      : (aggregatedData.durationMs ?? 0);
     const hours = durationMs / (1000 * 60 * 60);
+
+    const sleepLatencyMs = period === 'day' && checkInStart && summary?.start
+      ? Math.max(0, checkInStart - summary.start)
+      : null;
 
     const timeInBed = period === 'day'
       ? msToHrsMins(durationMs)
@@ -341,7 +414,9 @@ export default function SleepDetailsScreen({ route, navigation }) {
       ? msToHrsMins(Math.max(0, durationMs - aggregatedData.unlockCount * 2 * 60000))
       : msToHrsMins(Math.max(0, (durationMs - aggregatedData.unlockCount * 2 * 60000) / (aggregatedData.sessionCount || 1)));
 
-    const timeToSleep = `${Math.min(90, 10 + Math.round(aggregatedData.unlockCount / (aggregatedData.sessionCount || 1)) * 2)} min`;
+    const timeToSleep = sleepLatencyMs != null
+      ? msToHrsMins(sleepLatencyMs)
+      : "—";
 
     // Use self-reported quality if check-in exists (day view only)
     const selfReported = period === 'day' ? (checkIn?.sleep_quality ?? null) : null;
@@ -373,7 +448,11 @@ export default function SleepDetailsScreen({ route, navigation }) {
         return {
           id: String(idx),
           label: dayLabel,
+          shortLabel: `${Math.round(disruptionScore)}/10`,
           value: Math.round(disruptionScore),
+          riskLabel: getTrendRiskLabel(Math.round(disruptionScore)),
+          detail: `${hours.toFixed(1)}h in bed • ${s.unlockCount || 0} unlocks • ${s.notifCount || 0} notifications`,
+          explanation: `This day had ${Math.round(disruptionScore)}/10 disruption based on sleep duration, unlocks, and notifications.`,
         };
       });
       chartTitle = "Last 7 Days Trend";
@@ -392,7 +471,11 @@ export default function SleepDetailsScreen({ route, navigation }) {
         return {
           id: String(idx),
           label: dateLabel,
+          shortLabel: `${Math.round(disruptionScore)}/10`,
           value: Math.round(disruptionScore),
+          riskLabel: getTrendRiskLabel(Math.round(disruptionScore)),
+          detail: `${hours.toFixed(1)}h average in bed • ${s.unlockCount || 0} unlocks • ${s.notifCount || 0} notifications`,
+          explanation: `This session compared against the other recent nights and scored ${Math.round(disruptionScore)}/10 for disruption.`,
         };
       });
       chartTitle = "Last 7 Sessions";
@@ -414,7 +497,11 @@ export default function SleepDetailsScreen({ route, navigation }) {
         weekGroups.push({
           id: String(i),
           label: `W${4 - i}`,
+          shortLabel: `${Math.round(avgDisruption)}/10`,
           value: Math.round(avgDisruption),
+          riskLabel: getTrendRiskLabel(Math.round(avgDisruption)),
+          detail: `${weekSessions.length} sessions averaged together • weekly disruption trend`,
+          explanation: `This weekly bucket shows average disruption from ${weekSessions.length} sessions. Higher values mean more sleep interruption across the week.`,
         });
       }
       bars = weekGroups.reverse();
@@ -423,7 +510,7 @@ export default function SleepDetailsScreen({ route, navigation }) {
 
     // Fallback to demo data if no history
     const barsFinal = bars && bars.length > 0 ? bars : [
-      { id: "0", label: "—", value: 0 },
+      { id: "0", label: "—", shortLabel: "0/10", value: 0, riskLabel: "Low disruption", detail: "No trend data available", explanation: "No sleep trend data is available for this period." },
     ];
 
     const lateNightScreenMins = Math.min(180, aggregatedData.screenOnCount * 8);
@@ -432,7 +519,11 @@ export default function SleepDetailsScreen({ route, navigation }) {
     const sessionCount = aggregatedData.sessionCount || 1;
 
     const durationNote = period === 'day'
-      ? (hours < 6
+      ? (durationMs <= 0
+        ? "No valid sleep duration recorded. Add morning check-in times for a more accurate report."
+        : sleepLatencyMs == null
+        ? "Sleep latency is not recorded for this session. Add morning check-in times for a more accurate report."
+        : hours < 4
         ? "Short sleep detected. Consider reducing screen time 30–60 min before bed."
         : "Sleep duration looks okay. Consistent bedtime improves quality.")
       : `Average data from ${sessionCount} night${sessionCount > 1 ? 's' : ''}`;
@@ -455,6 +546,11 @@ export default function SleepDetailsScreen({ route, navigation }) {
       sessionCount,
     };
   }, [summary, checkIn, weeklyData, period]);
+
+  const selectedTrend = useMemo(() => {
+    if (!ui?.bars?.length) return null;
+    return ui.bars.find(bar => bar.id === selectedTrendId) ?? ui.bars[0] ?? null;
+  }, [ui, selectedTrendId]);
 
   return (
     <DashboardBackground>
@@ -522,8 +618,8 @@ export default function SleepDetailsScreen({ route, navigation }) {
               />
               <View style={styles.summaryGrid}>
                 <SummaryItem label="Time in bed" value={ui.timeInBed} />
-                <SummaryItem label="Time asleep" value={ui.timeAsleep} />
-                <SummaryItem label="Time to sleep" value={ui.timeToSleep} />
+                <SummaryItem label="Estimated asleep" value={ui.timeAsleep} />
+                <SummaryItem label="Sleep latency" value={ui.timeToSleep} />
                 <SummaryItem
                   label={`Quality${ui.qualitySource}`}
                   value={ui.quality}
@@ -533,7 +629,14 @@ export default function SleepDetailsScreen({ route, navigation }) {
             </Card>
 
             {/* Trend chart with dynamic title */}
-            <MiniBarChart title={ui.chartTitle} data={ui.bars} />
+            <MiniBarChart
+              title={ui.chartTitle}
+              data={ui.bars}
+              selectedId={selectedTrend?.id}
+              onSelect={setSelectedTrendId}
+            />
+
+            <TrendDetailCard trend={selectedTrend} />
 
             <View style={{ height: spacing.md }} />
 
@@ -680,8 +783,29 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "flex-end",
   },
+  barTrackSelected: {
+    borderColor: "rgba(255,255,255,0.28)",
+    shadowColor: colors.primary2,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   barFill: { width: "100%", borderRadius: 14, backgroundColor: "rgba(124,58,237,0.50)" },
   barLabel: { color: colors.faint, fontWeight: "900", fontSize: 12, marginTop: 8 },
+  barHint: { color: colors.muted, fontWeight: "700", fontSize: 10, marginTop: 2 },
+
+  trendDetailRow: { flexDirection: "row", gap: 10, marginBottom: 10 },
+  trendDetailBadge: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: colors.input,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  trendDetailBadgeLabel: { color: colors.muted, fontSize: 11, fontWeight: "800" },
+  trendDetailBadgeValue: { color: colors.text, fontSize: 14, fontWeight: "900", marginTop: 4 },
+  trendDetailText: { color: colors.muted, lineHeight: 18, fontSize: 12 },
 
   factorRow: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   factorIcon: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },

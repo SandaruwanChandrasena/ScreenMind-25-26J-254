@@ -321,6 +321,8 @@ export default function MorningCheckInScreen({ navigation }) {
       await saveMorningCheckIn({
         userId: null,
         sessionId: session.id,
+        sleepStartedAt: sleepDate ? sleepDate.getTime() : null,
+        wakeTime: wakeDate ? wakeDate.getTime() : null,
         sleepQuality, refreshed,
         wokeUp, headache, dryMouth, snoreUsed,
         ts: Date.now(),

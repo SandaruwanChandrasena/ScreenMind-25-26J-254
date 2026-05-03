@@ -347,7 +347,7 @@ export default function SleepHomeScreen({ navigation }) {
             const features = buildFeaturesFromSessions(last7);
             try {
               const mlResult = await withTimeout(predictSleepRiskML(features), 8000);
-              if (mlResult) {
+              if (mlResult && Number(mlResult.risk_score) > 0) {
                 updated = {
                   score: mlResult.risk_score,
                   risk: mlResult.risk_category,
@@ -376,7 +376,7 @@ export default function SleepHomeScreen({ navigation }) {
                 8000
               );
 
-              if (apiResult) {
+              if (apiResult && Number(apiResult.risk_score) > 0) {
                 updated = {
                   score: apiResult.risk_score,
                   risk: apiResult.risk_category,

@@ -99,6 +99,8 @@ async function ensureTables(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id TEXT,
       session_id INTEGER,
+      sleep_started_at INTEGER,
+      wake_time INTEGER,
       sleep_quality INTEGER,
       refreshed INTEGER,
       woke_up TEXT,
@@ -109,6 +111,17 @@ async function ensureTables(db) {
       FOREIGN KEY(session_id) REFERENCES sleep_sessions(id)
     );
   `);
+
+  try {
+    await db.executeSql(`ALTER TABLE morning_checkins ADD COLUMN sleep_started_at INTEGER;`);
+  } catch (e) {
+    // Column already exists, ignore error
+  }
+  try {
+    await db.executeSql(`ALTER TABLE morning_checkins ADD COLUMN wake_time INTEGER;`);
+  } catch (e) {
+    // Column already exists, ignore error
+  }
 
   await db.executeSql(`
     CREATE TABLE IF NOT EXISTS user_sleep_settings (
