@@ -741,7 +741,7 @@ export default function SleepHomeScreen({ navigation }) {
             navigation.navigate("SleepDetails", { sessionId: runningSessionId })
           }
         >
-          <Text style={styles.tabIcon}>�</Text>
+          <Text style={styles.tabIcon}>📋</Text>
           <Text style={styles.tabLabel}>Details</Text>
         </Pressable>
 
@@ -762,7 +762,7 @@ export default function SleepHomeScreen({ navigation }) {
           style={styles.tabItem}
           onPress={() => navigation.navigate("SleepSchedule")}
         >
-          <Text style={styles.tabIcon}>�️</Text>
+          <Text style={styles.tabIcon}>📅</Text>
           <Text style={styles.tabLabel}>Schedule</Text>
         </Pressable>
       </View>
