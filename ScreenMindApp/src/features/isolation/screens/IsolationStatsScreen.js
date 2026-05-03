@@ -232,7 +232,7 @@ export default function IsolationStatsScreen({ navigation }) {
           subtitle={`Your average risk this ${range.toLowerCase()}`}
           style={{ marginTop: spacing.lg }}
         >
-          <MiniBarChart values={chartPayload.values || []} labels={chartPayload.labels || []} maxScale={100} />
+          <MiniBarChart values={chartPayload.values || []} labels={chartPayload.labels || []} maxScale={100} showValuesInBar={range === "Week"} />
 
           <View style={styles.captionRow}>
             {!ui.isDemo && (
