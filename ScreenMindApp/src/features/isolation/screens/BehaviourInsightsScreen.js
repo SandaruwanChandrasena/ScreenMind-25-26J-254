@@ -113,7 +113,7 @@ export default function BehaviourInsightsScreen() {
     const socialPct = pickSocialPct(totalMins, socialMins);
 
     return [
-      { k: "Unlock count/day", v: unlocks == null ? "--" : `${unlocks}` },
+      // { k: "Unlock count/day", v: unlocks == null ? "--" : `${unlocks}` },
       { k: "Night phone usage", v: nightMins == null ? "--" : formatMinutes(nightMins) },
       { k: "Screen time (today)", v: totalMins == null ? "--" : formatMinutes(totalMins) },
       {
@@ -146,9 +146,9 @@ export default function BehaviourInsightsScreen() {
         )}
 
         {/* Optional: show saved history count */}
-        <Text style={styles.smallMeta}>
+        {/* <Text style={styles.smallMeta}>
           Saved records: {history.length} {history.length === 0 ? "(no stored data yet)" : ""}
-        </Text>
+        </Text> */}
 
         <GlassCard
           icon="phone-portrait-outline"

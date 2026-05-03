@@ -94,3 +94,29 @@ export async function upsertDailyIsolationRecord(record) {
 export async function clearIsolationHistory() {
   await AsyncStorage.removeItem(KEY_DAILY);
 }
+
+/**
+ * Mark that the current daily suggestions were shown to the user.
+ * Stores the score they were shown for so we can re-show if the risk changes.
+ */
+export async function markSuggestionsShown(date, riskScore = null) {
+  try {
+    const history = await getDailyIsolationHistory();
+    const idx = history.findIndex((r) => r.date === date);
+    if (idx < 0) return false;
+
+    history[idx] = {
+      ...history[idx],
+      suggestionsShown: true,
+      suggestionsShownScore: riskScore,
+      suggestionsShownAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    await AsyncStorage.setItem(KEY_DAILY, JSON.stringify(history.slice(0, 365)));
+    return true;
+  } catch (e) {
+    console.warn("markSuggestionsShown error:", e);
+    return false;
+  }
+}

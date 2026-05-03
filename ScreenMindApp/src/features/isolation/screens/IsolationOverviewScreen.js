@@ -139,13 +139,24 @@ export default function IsolationOverviewScreen({ navigation }) {
 
       // 7) Normalise result into the same shape the rest of the UI expects
       //    (backend returns slightly different field names from local scorer)
+      // If backend didn't provide "reasons" or "suggestions", compute them
+      // locally from today's features so the UI can explain the score.
+      let computedLocal = null;
+      if (!result.reasons || !result.reasons.length || !result.suggestions || !result.suggestions.length) {
+        try {
+          const { computeIsolationRisk } = await import('../services/isolationScoring');
+          computedLocal = computeIsolationRisk(todayFeatures, storedPrefs);
+        } catch (err) {
+          console.warn('Failed to compute local reasons/suggestions:', err);
+        }
+      }
       const normalisedRisk = {
         score:        result.score,
         label:        result.label,
         breakdown:    normaliseBreakdown(result.breakdown),
         used:         result.used_pillars ?? result.used ?? [],
-        reasons:      result.reasons      ?? [],
-        suggestions:  result.suggestions  ?? [],
+        reasons:      result.reasons      && result.reasons.length ? result.reasons : (computedLocal?.reasons ?? []),
+        suggestions:  result.suggestions  && result.suggestions.length ? result.suggestions : (computedLocal?.suggestions ?? []),
         socialItems:  result.socialItems  ?? [],
         withdrawItems:result.withdrawItems?? [],
       };
@@ -283,6 +294,10 @@ export default function IsolationOverviewScreen({ navigation }) {
               <Text style={[styles.riskLegendText, styles.riskLegendTextLow]}>Low Risk</Text>
             </View>
           </View>
+
+          <Text style={styles.researchBadge}>
+            Risk score is generated using mobility, communication, behaviour, and proximity signals.
+          </Text>
 
           <View style={{ height: spacing.md }} />
 
@@ -447,6 +462,14 @@ const styles = StyleSheet.create({
   riskLegendTextHigh: { color: "#fca5a5" },
   riskLegendTextModerate: { color: "#fde68a" },
   riskLegendTextLow: { color: "#86efac" },
+  researchBadge: {
+    marginTop: spacing.sm,
+    color: colors.muted,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+    fontWeight: "700",
+  },
 
   sectionTitle: { color: colors.text, fontWeight: "900", marginTop: spacing.lg, fontSize: 16 },
 

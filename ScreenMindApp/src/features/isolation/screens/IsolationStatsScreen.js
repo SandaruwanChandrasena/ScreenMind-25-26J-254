@@ -31,6 +31,24 @@ function avg(arr) {
   return Math.round(arr.reduce((a, b) => a + b, 0) / arr.length);
 }
 
+function getStartOfWeek(date = new Date()) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  return new Date(d.setDate(diff));
+}
+
+function getWeekDates() {
+  const start = getStartOfWeek();
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().slice(0, 10)); // YYYY-MM-DD
+  }
+  return dates;
+}
+
 function clampPct(value) {
   const num = Number(value || 0);
   return Math.max(0, Math.min(100, Math.round(num)));
@@ -93,14 +111,24 @@ export default function IsolationStatsScreen({ navigation }) {
     const sorted = [...history].reverse();
     const entries = sorted.map((r) => ({ date: r.date, score: Number(r.riskScore || 0) }));
 
-    // --- Week: last 7 days (values in chronological order)
-    const weekSlice = entries.slice(-7);
-    const weekValues = weekSlice.map((e) => e.score);
-    const weekLabels = weekSlice.map((e) => {
-      if (!e.date) return "";
-      const d = new Date(e.date);
+    // --- Week: only this week's data (Monday to Sunday)
+    const weekDates = getWeekDates();
+    const dateScoreMap = new Map();
+    entries.forEach((e) => {
+      if (e.date) dateScoreMap.set(e.date, e.score);
+    });
+    
+    const weekValues = weekDates.map((dateStr) => dateScoreMap.get(dateStr) ?? null);
+    const weekLabels = weekDates.map((dateStr) => {
+      const d = new Date(dateStr + "T00:00:00");
       return d.toLocaleDateString(undefined, { weekday: 'short' });
     });
+    
+    // Calculate average only from days with recorded data
+    const recordedScores = weekValues.filter((v) => v !== null);
+    const weekAverage = recordedScores.length > 0 
+      ? Math.round(recordedScores.reduce((a, b) => a + b, 0) / recordedScores.length)
+      : null;
 
     // --- Month: aggregate by YYYY-MM and show last 2 months (monthly average)
     const monthMap = new Map();
@@ -148,7 +176,7 @@ export default function IsolationStatsScreen({ navigation }) {
       week: {
         values: weekValues.length ? weekValues : DEMO_WEEK,
         labels: weekLabels.length ? weekLabels : [],
-        average: Math.round((weekValues.reduce((a, b) => a + b, 0) || 0) / Math.max(1, weekValues.length)),
+        average: weekAverage !== null ? weekAverage : Math.round((weekValues.filter(v => v !== null).reduce((a, b) => a + b, 0) || 0) / Math.max(1, weekValues.filter(v => v !== null).length)),
       },
       month: {
         values: monthValues.length ? monthValues : [],
