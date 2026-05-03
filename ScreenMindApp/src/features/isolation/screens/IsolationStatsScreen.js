@@ -91,10 +91,52 @@ export default function IsolationStatsScreen({ navigation }) {
   const ui = useMemo(() => {
     // History is saved newest-first; reverse for charts (oldest → newest left→right)
     const sorted = [...history].reverse();
-    const scores = sorted.map((r) => Number(r.riskScore || 0));
+    const entries = sorted.map((r) => ({ date: r.date, score: Number(r.riskScore || 0) }));
 
-    const weekRisk  = scores.slice(-7);
-    const monthRisk = scores.slice(-30);
+    // --- Week: last 7 days (values in chronological order)
+    const weekSlice = entries.slice(-7);
+    const weekValues = weekSlice.map((e) => e.score);
+    const weekLabels = weekSlice.map((e) => {
+      if (!e.date) return "";
+      const d = new Date(e.date);
+      return d.toLocaleDateString(undefined, { weekday: 'short' });
+    });
+
+    // --- Month: aggregate by YYYY-MM and show last 2 months (monthly average)
+    const monthMap = new Map();
+    entries.forEach((e) => {
+      if (!e.date) return;
+      const key = e.date.slice(0, 7); // YYYY-MM
+      if (!monthMap.has(key)) monthMap.set(key, []);
+      monthMap.get(key).push(e.score);
+    });
+    const months = Array.from(monthMap.keys()).sort();
+    const lastMonths = months.slice(-2);
+    const monthValues = lastMonths.map((k) => {
+      const arr = monthMap.get(k) || [];
+      return arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+    });
+    const monthLabels = lastMonths.map((k) => {
+      const [y, m] = k.split("-");
+      const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+      return `${monthNames[Number(m) - 1] ?? k}`;
+    });
+
+    // --- Year: aggregate by YYYY and show last 2 years (yearly average)
+    const yearMap = new Map();
+    entries.forEach((e) => {
+      if (!e.date) return;
+      const key = e.date.slice(0, 4); // YYYY
+      if (!yearMap.has(key)) yearMap.set(key, []);
+      yearMap.get(key).push(e.score);
+    });
+    const years = Array.from(yearMap.keys()).sort();
+    const lastYears = years.slice(-2);
+    const yearValues = lastYears.map((k) => {
+      const arr = yearMap.get(k) || [];
+      return arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+    });
+    const yearLabels = lastYears.map((k) => k);
 
     // ── Social / Withdraw from most recent real breakdown ───────────────────
     const latest = history[0]; // newest-first
@@ -103,15 +145,28 @@ export default function IsolationStatsScreen({ navigation }) {
       : { socialItems: [], withdrawItems: [] };
 
     return {
-      weekRisk:    weekRisk.length  ? weekRisk  : DEMO_WEEK,
-      monthRisk:   monthRisk.length ? monthRisk : DEMO_MONTH,
+      week: {
+        values: weekValues.length ? weekValues : DEMO_WEEK,
+        labels: weekLabels.length ? weekLabels : [],
+        average: Math.round((weekValues.reduce((a, b) => a + b, 0) || 0) / Math.max(1, weekValues.length)),
+      },
+      month: {
+        values: monthValues.length ? monthValues : [],
+        labels: monthLabels.length ? monthLabels : [],
+        average: monthValues.length ? Math.round(monthValues.reduce((a, b) => a + b, 0) / monthValues.length) : null,
+      },
+      year: {
+        values: yearValues.length ? yearValues : [],
+        labels: yearLabels.length ? yearLabels : [],
+        average: yearValues.length ? Math.round(yearValues.reduce((a, b) => a + b, 0) / yearValues.length) : null,
+      },
       socialItems,
       withdrawItems,
       isDemo: history.length === 0,
     };
   }, [history]);
 
-  const chartData = range === "Week" ? ui.weekRisk : ui.monthRisk;
+  const chartPayload = range === "Week" ? ui.week : range === "Month" ? ui.month : ui.year;
   const listData  = mode === "Social" ? ui.socialItems : ui.withdrawItems;
 
   return (
@@ -149,7 +204,7 @@ export default function IsolationStatsScreen({ navigation }) {
           subtitle={`Your average risk this ${range.toLowerCase()}`}
           style={{ marginTop: spacing.lg }}
         >
-          <MiniBarChart values={chartData} />
+          <MiniBarChart values={chartPayload.values || []} labels={chartPayload.labels || []} maxScale={100} />
 
           <View style={styles.captionRow}>
             {!ui.isDemo && (
@@ -159,7 +214,7 @@ export default function IsolationStatsScreen({ navigation }) {
             )}
 
             <View style={styles.captionRight}>
-              <Text style={styles.captionStrong}>{avg(chartData)}/100</Text>
+              <Text style={styles.captionStrong}>{(chartPayload.average !== null && chartPayload.average !== undefined) ? `${chartPayload.average}/100` : "--/100"}</Text>
               <Text style={styles.captionPositive}>Lower is better</Text>
             </View>
           </View>
