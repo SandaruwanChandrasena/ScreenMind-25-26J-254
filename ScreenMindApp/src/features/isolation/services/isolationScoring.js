@@ -1,23 +1,31 @@
 /**
- * isolationScoring.js
+ * isolationScoring.js - FALLBACK/BASELINE SCORER
  *
- * Rule-based isolation risk scorer.
- * Input:  features object (from collectRealFeatures)
- *         prefs    object (which data types are enabled)
- * Output: { score, label, breakdown, used, reasons, suggestions }
+ * Rule-based isolation risk scorer (offline, deterministic heuristic).
  *
- * "score"      0–100  (higher = more risk)
- * "label"      "Low" | "Moderate" | "High"
- * "breakdown"  per-pillar raw 0–25 scores  { mobility, comm, beh, prox }
- * "used"       string[]  which pillars were active
- * "reasons"    { title, detail }[]  ranked explanations (for IsolationWhyScreen)
- * "suggestions" { title, detail }[] personalised actions (for IsolationSuggestionsScreen)
+ * ════════════════════════════════════════════════════════════════════════════
+ * PURPOSE:
+ * ─ Fallback when backend ML is unavailable (offline, network error, etc.)
+ * ─ Baseline for comparing ML model outputs
+ * ─ Research validation: test heuristic vs. learned model performance
  *
- * ── NOTE ───────────────────────────────────────────────────────────────────
- *  This is intentionally kept as pure functions (no side effects, no imports)
- *  so it can later be swapped for a TensorFlow.js LSTM model output.
- *  The scoring thresholds below are informed by StudentLife / AWARE literature.
- * ─────────────────────────────────────────────────────────────────────────
+ * INPUT:
+ *   features object (from collectRealFeatures)
+ *   prefs    object (which data types are enabled)
+ *
+ * OUTPUT:
+ *   score       0–100  (higher = more isolation risk)
+ *   label       "Low" | "Moderate" | "High"
+ *   breakdown   per-pillar raw scores { mobility, comm, beh, prox }
+ *   used        string[] which pillars were active
+ *   reasons     { title, detail }[] ranked explanations
+ *   suggestions { title, detail }[] personalised actions
+ *
+ * IMPLEMENTATION NOTES:
+ *   • Pure functions (no side effects) → swappable with TensorFlow.js model
+ *   • Thresholds informed by StudentLife / AWARE academic literature
+ *   • Designed for single-day input (unlike ML backend which uses 7-day window)
+ * ════════════════════════════════════════════════════════════════════════════
  */
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -276,8 +284,18 @@ function buildSocialWithdrawBreakdown(mobilityR, commR, behR, proxR, prefs) {
  *   withdrawItems: { label: string, pct: number }[],
  * }}
  */
+/**
+ * computeIsolationRisk - BASELINE HEURISTIC SCORER
+ *
+ * Main entry point for the rule-based fallback scorer.
+ * Returns the same response shape as the ML backend for consistency.
+ *
+ * @param {object} features - Daily sensor features from collectRealFeatures()
+ * @param {object} prefs    - User data collection preferences
+ * @returns {object} Isolation risk result with score, label, breakdown, reasons, suggestions
+ */
 export function computeIsolationRisk(features, prefs) {
-  // ── Pillar scores (0–1) ────────────────────────────────────────────────────
+  // ── Compute per-pillar risk scores (0–1 range) ──────────────────────────
   const mobilityR = prefs.gps    ? mobilityRisk(features)                  : { score: 0, items: [] };
   const commR     = (prefs.calls || prefs.sms) ? communicationRisk(features, prefs) : { score: 0, items: [] };
   const behR      = prefs.usage  ? behaviourRisk(features)                 : { score: 0, items: [] };
@@ -330,9 +348,9 @@ export function computeIsolationRisk(features, prefs) {
     label,
     breakdown: {
       mobility: Math.round(mobilityScore),
-      comm:     Math.round(commScore),
-      beh:      Math.round(behScore),
-      prox:     Math.round(proxScore),
+      communication: Math.round(commScore),  // align with backend schema
+      behaviour:     Math.round(behScore),   // align with backend schema
+      proximity:     Math.round(proxScore),  // align with backend schema
     },
     used,
     reasons,

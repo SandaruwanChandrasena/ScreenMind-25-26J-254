@@ -132,13 +132,14 @@ export default function IsolationOverviewScreen({ navigation }) {
         storedPrefs
       );
 
-      // 6) Detect whether backend ML or local scorer was used
-      //    The local scorer sets message starting with "(Local"
-      const usedBackend = !result.message?.startsWith("(Local");
+      // 6) Track which scorer was used (ML backend PRIMARY vs local baseline FALLBACK)
+      //    Both scorers now return a "method" field for explicit tracking
+      const usedBackend = result.method === "ml_backend";
       setUsingBackend(usedBackend);
 
-      // 7) Normalise result into the same shape the rest of the UI expects
-      //    (backend returns slightly different field names from local scorer)
+      // 7) Normalise result: both ML and local now return compatible shapes
+      //    ML backend returns: score, label, breakdown, used_pillars, probabilities
+      //    Local heuristic returns: score, label, breakdown, used, reasons, suggestions, socialItems
       const normalisedRisk = {
         score:        result.score,
         label:        result.label,
@@ -148,10 +149,12 @@ export default function IsolationOverviewScreen({ navigation }) {
         suggestions:  result.suggestions  ?? [],
         socialItems:  result.socialItems  ?? [],
         withdrawItems:result.withdrawItems?? [],
+        method:       result.method       ?? "unknown",
       };
       setRisk(normalisedRisk);
 
       // 8) Save full record so Why/Suggestions/Stats screens can read it
+      //    method field tracks: "ml_backend" (PRIMARY) or "local_baseline" (FALLBACK)
       await upsertDailyIsolationRecord({
         date:          todayISO(),
         riskScore:     normalisedRisk.score,
@@ -163,7 +166,7 @@ export default function IsolationOverviewScreen({ navigation }) {
         socialItems:   normalisedRisk.socialItems,
         withdrawItems: normalisedRisk.withdrawItems,
         features:      todayFeatures,
-        source:        usedBackend ? "ml_backend" : "local_scorer",
+        method:        normalisedRisk.method,  // track: ml_backend or local_baseline
       });
 
     } catch (e) {

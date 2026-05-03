@@ -210,3 +210,6 @@ const styles = StyleSheet.create({
   },
   refreshText: { color: colors.text, fontWeight: "900" },
 });
+
+
+//  chmod +x android/gradlew 
