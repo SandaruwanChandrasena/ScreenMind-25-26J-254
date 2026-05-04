@@ -1,17 +1,21 @@
 /**
  * SMJournalInputCard — Premium Multi-Page Journal Input
  *
- * FIXES IN THIS VERSION:
+ * BOOK UI IMPROVEMENTS:
  *
- * FIX 1 — Edit mode shows blank text (root cause):
- *   The component always initialised pages with [makePage(0)] — a fresh blank page.
- *   The `text` prop was only used to DETECT a Clear action (text going '' from non-empty).
- *   It was never used to SEED the page content on mount.
- *   Fix: Added `initialPages` prop. When provided (edit mode), useState seeds from it.
- *   EditModal now passes entry.pages as initialPages so existing content loads correctly.
+ * 1. Serif font (Georgia) in writing area — feels like a real diary
+ * 2. Stronger ruled lines — more visible notebook paper effect
+ * 3. Thicker spine with stitching dots — physical book feel
+ * 4. Date shown in page header — diary-like context
+ * 5. Warmer paper background tint — less harsh than pure dark
+ * 6. Placeholder text is italic serif — inviting writing prompt
+ * 7. Deeper book shadow layers — more 3D book depth
+ * 8. Line height tuned to ruled lines — text sits ON the lines
+ * 9. Toolbar hidden behind a toggle — cleaner default writing view
  *
- * FIX 2 — suppressResetRef for add/delete/navigate page actions.
- *   (carried over from previous fix — prevents text erase on + Page)
+ * PRESERVED FIXES:
+ * FIX 1 — initialPages prop seeds edit mode correctly
+ * FIX 2 — suppressResetRef prevents text erase on page actions
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -31,29 +35,29 @@ import { spacing } from '../../../theme/spacing';
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const MOODS = [
-  { key: 'happy', label: 'Happy', emoji: '😄', color: '#FFD93D' },
+  { key: 'happy',   label: 'Happy',   emoji: '😄', color: '#FFD93D' },
   { key: 'neutral', label: 'Neutral', emoji: '😐', color: '#94A3B8' },
-  { key: 'sad', label: 'Sad', emoji: '😞', color: '#60A5FA' },
-  { key: 'angry', label: 'Angry', emoji: '😡', color: '#F87171' },
-  { key: 'tired', label: 'Tired', emoji: '😴', color: '#C084FC' },
+  { key: 'sad',     label: 'Sad',     emoji: '😞', color: '#60A5FA' },
+  { key: 'angry',   label: 'Angry',   emoji: '😡', color: '#F87171' },
+  { key: 'tired',   label: 'Tired',   emoji: '😴', color: '#C084FC' },
 ];
 
 const FONT_SIZES = [
   { key: 'xs', label: 'XS', size: 12 },
-  { key: 'sm', label: 'S', size: 14 },
-  { key: 'md', label: 'M', size: 16 },
-  { key: 'lg', label: 'L', size: 20 },
+  { key: 'sm', label: 'S',  size: 14 },
+  { key: 'md', label: 'M',  size: 16 },
+  { key: 'lg', label: 'L',  size: 20 },
   { key: 'xl', label: 'XL', size: 26 },
 ];
 
 const TEXT_COLORS = [
-  { key: 'snow', hex: '#FFFFFF', label: 'Snow' },
-  { key: 'violet', hex: '#A78BFA', label: 'Violet' },
-  { key: 'sky', hex: '#38BDF8', label: 'Sky' },
-  { key: 'rose', hex: '#FB7185', label: 'Rose' },
-  { key: 'amber', hex: '#FCD34D', label: 'Amber' },
+  { key: 'snow',    hex: '#FFFFFF', label: 'Snow'    },
+  { key: 'violet',  hex: '#A78BFA', label: 'Violet'  },
+  { key: 'sky',     hex: '#38BDF8', label: 'Sky'     },
+  { key: 'rose',    hex: '#FB7185', label: 'Rose'    },
+  { key: 'amber',   hex: '#FCD34D', label: 'Amber'   },
   { key: 'emerald', hex: '#34D399', label: 'Emerald' },
-  { key: 'peach', hex: '#FDBA74', label: 'Peach' },
+  { key: 'peach',   hex: '#FDBA74', label: 'Peach'   },
 ];
 
 const DEFAULT_FORMAT = {
@@ -66,45 +70,45 @@ const DEFAULT_FORMAT = {
 
 const MAX_CHARS = 500;
 const MAX_PAGES = 10;
+// Line height for ruled lines — must match inputStyle lineHeight
+const LINE_H    = 28;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const makePage = (index = 0) => ({
-  id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  title: `Page ${index + 1}`,
-  text: '',
+  id:     `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  title:  `Page ${index + 1}`,
+  text:   '',
   format: { ...DEFAULT_FORMAT },
 });
 
-// Normalise a page loaded from Firebase — it may be missing fields
 const normalisePage = (p, index) => ({
-  id: p.id || `${Date.now()}-${index}`,
-  title: p.title || `Page ${index + 1}`,
-  text: p.text || '',
+  id:     p.id     || `${Date.now()}-${index}`,
+  title:  p.title  || `Page ${index + 1}`,
+  text:   p.text   || '',
   format: p.format ? { ...DEFAULT_FORMAT, ...p.format } : { ...DEFAULT_FORMAT },
 });
 
-const hexFor = key => TEXT_COLORS.find(c => c.key === key)?.hex ?? '#FFFFFF';
-const sizeFor = key => FONT_SIZES.find(f => f.key === key)?.size ?? 16;
+const hexFor  = key => TEXT_COLORS.find(c => c.key === key)?.hex  ?? '#FFFFFF';
+const sizeFor = key => FONT_SIZES.find(f  => f.key === key)?.size ?? 16;
+
+// Format today's date like "May 4, 2026"
+function todayLabel() {
+  return new Date().toLocaleDateString('en-US', {
+    month: 'long',
+    day:   'numeric',
+    year:  'numeric',
+  });
+}
 
 // ─── Toolbar button ───────────────────────────────────────────────────────────
 
-function TBtn({
-  label,
-  active,
-  onPress,
-  tStyle,
-  activeColor = colors.primary,
-}) {
+function TBtn({ label, active, onPress, tStyle, activeColor = colors.primary }) {
   const scale = useRef(new Animated.Value(1)).current;
   const fire = () => {
     Animated.sequence([
-      Animated.spring(scale, {
-        toValue: 0.8,
-        useNativeDriver: true,
-        speed: 60,
-      }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 28 }),
+      Animated.spring(scale, { toValue: 0.8, useNativeDriver: true, speed: 60 }),
+      Animated.spring(scale, { toValue: 1,   useNativeDriver: true, speed: 28 }),
     ]).start();
     onPress?.();
   };
@@ -115,7 +119,7 @@ function TBtn({
           S.tBtn,
           active && {
             backgroundColor: activeColor + '28',
-            borderColor: activeColor + '70',
+            borderColor:     activeColor + '70',
           },
           { transform: [{ scale }] },
         ]}
@@ -134,17 +138,9 @@ function ColorSwatch({ hex, label, active, onPress }) {
   const scale = useRef(new Animated.Value(1)).current;
   const fire = () => {
     Animated.sequence([
-      Animated.spring(scale, {
-        toValue: 0.78,
-        useNativeDriver: true,
-        speed: 60,
-      }),
-      Animated.spring(scale, {
-        toValue: 1.1,
-        useNativeDriver: true,
-        speed: 28,
-      }),
-      Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 28 }),
+      Animated.spring(scale, { toValue: 0.78, useNativeDriver: true, speed: 60 }),
+      Animated.spring(scale, { toValue: 1.1,  useNativeDriver: true, speed: 28 }),
+      Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 28 }),
     ]).start();
     onPress?.();
   };
@@ -158,12 +154,7 @@ function ColorSwatch({ hex, label, active, onPress }) {
           { transform: [{ scale }] },
         ]}
       />
-      <Text
-        style={[
-          S.swatchLbl,
-          { color: active ? hex : 'rgba(255,255,255,0.40)' },
-        ]}
-      >
+      <Text style={[S.swatchLbl, { color: active ? hex : 'rgba(255,255,255,0.40)' }]}>
         {label}
       </Text>
     </Pressable>
@@ -180,10 +171,8 @@ export default function SMJournalInputCard({
   selectedMood,
   onSelectMood,
   onPagesChange,
-  // FIX 1: New prop — pass entry.pages when opening in edit mode
-  // so the card pre-populates with existing content instead of a blank page.
   initialPages,
-  placeholder = 'Begin writing…',
+  placeholder = 'Write how you feel today…',
 }) {
   // FIX 1: Seed pages from initialPages if provided, otherwise start blank.
   const [pages, setPages] = useState(() => {
@@ -193,42 +182,35 @@ export default function SMJournalInputCard({
     return [makePage(0)];
   });
 
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [tab, setTab] = useState('style');
+  const [currentIdx,   setCurrentIdx]   = useState(0);
+  const [tab,          setTab]          = useState('style');
   const [editingTitle, setEditingTitle] = useState(false);
+  // NEW: toolbar collapsed by default — cleaner writing view for general users
+  const [toolbarOpen,  setToolbarOpen]  = useState(false);
 
   const textRef = useRef(null);
 
-  // ── Stable ref wrappers ───────────────────────────────────────────────────
   const onPagesChangeRef = useRef(onPagesChange);
-  const onChangeTextRef = useRef(onChangeText);
-  useEffect(() => {
-    onPagesChangeRef.current = onPagesChange;
-  }, [onPagesChange]);
-  useEffect(() => {
-    onChangeTextRef.current = onChangeText;
-  }, [onChangeText]);
+  const onChangeTextRef  = useRef(onChangeText);
+  useEffect(() => { onPagesChangeRef.current = onPagesChange; }, [onPagesChange]);
+  useEffect(() => { onChangeTextRef.current  = onChangeText;  }, [onChangeText]);
 
-  // ── Suppress reset guard during programmatic navigation ──────────────────
-  // Prevents addPage / deletePage / goTo from triggering the "Clear detected" wipe.
+  // FIX 2: Suppress reset guard during programmatic navigation
   const suppressResetRef = useRef(false);
 
-  // ── Notify parent of pages after state settles ────────────────────────────
   useEffect(() => {
     onPagesChangeRef.current?.(pages);
   }, [pages]);
 
-  // ── Sync parent text when page changes ───────────────────────────────────
   useEffect(() => {
     onChangeTextRef.current?.(pages[currentIdx]?.text ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIdx]);
 
-  // ── Detect parent-initiated Clear ────────────────────────────────────────
   const prevTextRef = useRef(text);
   useEffect(() => {
     const wasNonEmpty = prevTextRef.current !== '';
-    const isNowEmpty = text === '';
+    const isNowEmpty  = text === '';
     prevTextRef.current = text;
 
     if (isNowEmpty && wasNonEmpty) {
@@ -236,7 +218,6 @@ export default function SMJournalInputCard({
         suppressResetRef.current = false;
         return;
       }
-      // Genuine Clear — reset all pages
       setPages([makePage(0)]);
       setCurrentIdx(0);
     }
@@ -244,8 +225,8 @@ export default function SMJournalInputCard({
   }, [text]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const page = pages[currentIdx] ?? pages[0];
-  const fmt = page?.format ?? DEFAULT_FORMAT;
+  const page  = pages[currentIdx] ?? pages[0];
+  const fmt   = page?.format ?? DEFAULT_FORMAT;
   const chars = page?.text?.length ?? 0;
 
   // ── State helpers ─────────────────────────────────────────────────────────
@@ -327,7 +308,7 @@ export default function SMJournalInputCard({
           style: 'destructive',
           onPress: () => {
             setPages(prev => {
-              const next = prev.filter((_, i) => i !== currentIdx);
+              const next   = prev.filter((_, i) => i !== currentIdx);
               const newIdx = Math.min(currentIdx, next.length - 1);
               suppressResetRef.current = true;
               setCurrentIdx(newIdx);
@@ -339,29 +320,26 @@ export default function SMJournalInputCard({
     );
   }, [pages.length, page, currentIdx]);
 
-  // ── Derived input style ───────────────────────────────────────────────────
+  // ── Input style — serif font for book/diary feel ──────────────────────────
   const inputStyle = {
-    fontSize: sizeFor(fmt.fontSize),
-    color: hexFor(fmt.textColor),
-    fontWeight: fmt.bold ? '900' : '400',
-    fontStyle: fmt.italic ? 'italic' : 'normal',
+    fontSize:           sizeFor(fmt.fontSize),
+    color:              hexFor(fmt.textColor),
+    fontWeight:         fmt.bold      ? '700'       : '400',
+    fontStyle:          fmt.italic    ? 'italic'    : 'normal',
     textDecorationLine: fmt.underline ? 'underline' : 'none',
-    lineHeight: sizeFor(fmt.fontSize) * 1.65,
+    lineHeight:         LINE_H,       // matches ruled line spacing
+    fontFamily:         'serif',      // BOOK FEEL: diary/journal font
   };
 
   const hasFormat =
-    fmt.bold ||
-    fmt.italic ||
-    fmt.underline ||
-    fmt.fontSize !== 'md' ||
+    fmt.bold || fmt.italic || fmt.underline ||
+    fmt.fontSize  !== 'md' ||
     fmt.textColor !== 'snow';
 
   const cntColor =
-    chars > MAX_CHARS * 0.9
-      ? '#EF4444'
-      : chars > MAX_CHARS * 0.7
-      ? '#FFB800'
-      : 'rgba(255,255,255,0.28)';
+    chars > MAX_CHARS * 0.9 ? '#EF4444' :
+    chars > MAX_CHARS * 0.7 ? '#FFB800' :
+    'rgba(255,255,255,0.28)';
 
   return (
     <View>
@@ -381,7 +359,7 @@ export default function SMJournalInputCard({
                 S.moodChip,
                 active && {
                   backgroundColor: m.color + '22',
-                  borderColor: m.color + '66',
+                  borderColor:     m.color + '66',
                 },
                 pressed && { opacity: 0.8 },
               ]}
@@ -398,12 +376,21 @@ export default function SMJournalInputCard({
 
       {/* ══ BOOK CARD ════════════════════════════════════════════════════════ */}
       <View style={S.bookShell}>
+        {/* ── Depth shadow layers ── */}
         <View style={S.depthC} />
         <View style={S.depthB} />
         <View style={S.depthA} />
 
+        {/* ── Physical spine with stitching dots ── */}
+        <View style={S.spine}>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <View key={i} style={S.spineStitch} />
+          ))}
+        </View>
+
         <View style={S.card}>
-          {/* ── HEADER ──────────────────────────────────────────────────── */}
+
+          {/* ── HEADER — page title + date ───────────────────────────────── */}
           <View style={S.header}>
             <View style={S.headerL}>
               <View style={S.spineDot} />
@@ -429,9 +416,12 @@ export default function SMJournalInputCard({
             </View>
 
             <View style={S.headerR}>
+              {/* NEW: today's date label */}
+              <Text style={S.dateLabel}>{todayLabel()}</Text>
+
               {hasFormat && (
                 <Pressable onPress={resetFmt} style={S.resetBtn} hitSlop={8}>
-                  <Text style={S.resetTxt}>↺ Reset</Text>
+                  <Text style={S.resetTxt}>↺</Text>
                 </Pressable>
               )}
               <View style={S.pgBadge}>
@@ -442,102 +432,119 @@ export default function SMJournalInputCard({
             </View>
           </View>
 
-          {/* ── TOOLBAR TABS ────────────────────────────────────────────── */}
-          <View style={S.tabRow}>
-            {[
-              { key: 'style', icon: '✍️', label: 'Style' },
-              { key: 'color', icon: '🎨', label: 'Color' },
-            ].map(t => (
-              <Pressable
-                key={t.key}
-                onPress={() => setTab(t.key)}
-                style={[S.tabBtn, tab === t.key && S.tabBtnOn]}
-              >
-                <Text style={[S.tabTxt, tab === t.key && S.tabTxtOn]}>
-                  {t.icon} {t.label}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
+          {/* ── TOOLBAR TOGGLE — collapsed by default ────────────────────── */}
+          <Pressable
+            onPress={() => setToolbarOpen(o => !o)}
+            style={S.toolbarToggle}
+          >
+            <Text style={S.toolbarToggleIcon}>✍️</Text>
+            <Text style={S.toolbarToggleTxt}>
+              {toolbarOpen ? 'Hide formatting' : 'Formatting'}
+            </Text>
+            <Text style={S.toolbarToggleChevron}>
+              {toolbarOpen ? '▲' : '▼'}
+            </Text>
+          </Pressable>
 
-          {/* ── TOOLBAR BODY ────────────────────────────────────────────── */}
-          <View style={S.toolWrap}>
-            {tab === 'style' && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={S.toolRow}
-              >
-                <TBtn
-                  label="B"
-                  active={fmt.bold}
-                  onPress={() => toggleFmt('bold')}
-                  tStyle={{ fontWeight: '900', fontSize: 15 }}
-                />
-                <TBtn
-                  label="I"
-                  active={fmt.italic}
-                  onPress={() => toggleFmt('italic')}
-                  tStyle={{ fontStyle: 'italic', fontSize: 14 }}
-                />
-                <TBtn
-                  label="U"
-                  active={fmt.underline}
-                  onPress={() => toggleFmt('underline')}
-                  tStyle={{ textDecorationLine: 'underline', fontSize: 14 }}
-                />
-                <TDiv />
-                {FONT_SIZES.map(f => (
-                  <TBtn
-                    key={f.key}
-                    label={f.label}
-                    active={fmt.fontSize === f.key}
-                    onPress={() => patchFmt('fontSize', f.key)}
-                    tStyle={{ fontSize: 11 }}
-                  />
+          {/* ── TOOLBAR — only shown when toolbarOpen ────────────────────── */}
+          {toolbarOpen && (
+            <>
+              <View style={S.tabRow}>
+                {[
+                  { key: 'style', icon: '✍️', label: 'Style' },
+                  { key: 'color', icon: '🎨', label: 'Color' },
+                ].map(t => (
+                  <Pressable
+                    key={t.key}
+                    onPress={() => setTab(t.key)}
+                    style={[S.tabBtn, tab === t.key && S.tabBtnOn]}
+                  >
+                    <Text style={[S.tabTxt, tab === t.key && S.tabTxtOn]}>
+                      {t.icon} {t.label}
+                    </Text>
+                  </Pressable>
                 ))}
-              </ScrollView>
-            )}
-            {tab === 'color' && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={S.toolRow}
-              >
-                {TEXT_COLORS.map(c => (
-                  <ColorSwatch
-                    key={c.key}
-                    hex={c.hex}
-                    label={c.label}
-                    active={fmt.textColor === c.key}
-                    onPress={() => patchFmt('textColor', c.key)}
-                  />
-                ))}
-              </ScrollView>
-            )}
-          </View>
+              </View>
 
-          {/* ── RULED LINES ─────────────────────────────────────────────── */}
-          <View style={S.ruled} pointerEvents="none">
+              <View style={S.toolWrap}>
+                {tab === 'style' && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={S.toolRow}
+                  >
+                    <TBtn
+                      label="B"
+                      active={fmt.bold}
+                      onPress={() => toggleFmt('bold')}
+                      tStyle={{ fontWeight: '900', fontSize: 15 }}
+                    />
+                    <TBtn
+                      label="I"
+                      active={fmt.italic}
+                      onPress={() => toggleFmt('italic')}
+                      tStyle={{ fontStyle: 'italic', fontSize: 14 }}
+                    />
+                    <TBtn
+                      label="U"
+                      active={fmt.underline}
+                      onPress={() => toggleFmt('underline')}
+                      tStyle={{ textDecorationLine: 'underline', fontSize: 14 }}
+                    />
+                    <TDiv />
+                    {FONT_SIZES.map(f => (
+                      <TBtn
+                        key={f.key}
+                        label={f.label}
+                        active={fmt.fontSize === f.key}
+                        onPress={() => patchFmt('fontSize', f.key)}
+                        tStyle={{ fontSize: 11 }}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+                {tab === 'color' && (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={S.toolRow}
+                  >
+                    {TEXT_COLORS.map(c => (
+                      <ColorSwatch
+                        key={c.key}
+                        hex={c.hex}
+                        label={c.label}
+                        active={fmt.textColor === c.key}
+                        onPress={() => patchFmt('textColor', c.key)}
+                      />
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            </>
+          )}
+
+          {/* ── RULED LINES — absolute behind input ──────────────────────── */}
+          <View style={S.ruledContainer} pointerEvents="none">
             {Array.from({ length: 9 }).map((_, i) => (
               <View key={i} style={S.ruledLine} />
             ))}
           </View>
 
-          {/* ── INPUT ───────────────────────────────────────────────────── */}
+          {/* ── INPUT — serif font, sits on ruled lines ───────────────────── */}
           <TextInput
             ref={textRef}
             value={page?.text ?? ''}
             onChangeText={handleText}
             placeholder={placeholder}
-            placeholderTextColor="rgba(255,255,255,0.20)"
+            placeholderTextColor="rgba(255,255,255,0.18)"
             multiline
             style={[S.input, inputStyle]}
             textAlignVertical="top"
             selectionColor={colors.primary + 'BB'}
           />
 
-          {/* ── FOOTER ──────────────────────────────────────────────────── */}
+          {/* ── FOOTER ───────────────────────────────────────────────────── */}
           <View style={S.footer}>
             <ScrollView
               horizontal
@@ -545,21 +552,17 @@ export default function SMJournalInputCard({
               style={{ flex: 1 }}
               contentContainerStyle={S.tagRow}
             >
-              {fmt.bold && <FmtTag label="Bold" />}
-              {fmt.italic && <FmtTag label="Italic" />}
+              {fmt.bold      && <FmtTag label="Bold" />}
+              {fmt.italic    && <FmtTag label="Italic" />}
               {fmt.underline && <FmtTag label="Underline" />}
               {fmt.fontSize !== 'md' && (
                 <FmtTag
-                  label={`Size ${
-                    FONT_SIZES.find(f => f.key === fmt.fontSize)?.label
-                  }`}
+                  label={`Size ${FONT_SIZES.find(f => f.key === fmt.fontSize)?.label}`}
                 />
               )}
               {fmt.textColor !== 'snow' && (
                 <FmtTag
-                  label={
-                    TEXT_COLORS.find(c => c.key === fmt.textColor)?.label ?? ''
-                  }
+                  label={TEXT_COLORS.find(c => c.key === fmt.textColor)?.label ?? ''}
                   color={hexFor(fmt.textColor)}
                   dot={hexFor(fmt.textColor)}
                 />
@@ -666,11 +669,13 @@ function NavArrow({ dir, disabled, onPress }) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const CARD_BG = '#0C1422';
-const BDR = 'rgba(124,58,237,0.28)';
+const CARD_BG = '#0E1628';   // warmer dark — less harsh than pure black
+const BDR     = 'rgba(124,58,237,0.28)';
 const SPINE_C = colors.primary;
 
 const S = StyleSheet.create({
+
+  // ── Mood strip ────────────────────────────────────────────────────────────
   moodRow: {
     flexDirection: 'row',
     gap: 10,
@@ -689,45 +694,65 @@ const S = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   moodEmoji: { fontSize: 15 },
-  moodLbl: { color: 'rgba(255,255,255,0.50)', fontWeight: '800', fontSize: 11 },
+  moodLbl:   { color: 'rgba(255,255,255,0.50)', fontWeight: '800', fontSize: 11 },
 
-  bookShell: { position: 'relative', marginLeft: 8, marginBottom: 4 },
+  // ── Book shell ────────────────────────────────────────────────────────────
+  bookShell: {
+    position: 'relative',
+    marginLeft: 14,   // room for spine
+    marginBottom: 4,
+  },
+
+  // Depth layers — create 3D book stack effect
   depthC: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    right: -8,
-    bottom: -8,
+    top: 10, left: 10, right: -10, bottom: -10,
     borderRadius: 22,
-    backgroundColor: 'rgba(124,58,237,0.06)',
+    backgroundColor: 'rgba(124,58,237,0.04)',
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.07)',
+    borderColor: 'rgba(124,58,237,0.06)',
   },
   depthB: {
     position: 'absolute',
-    top: 4,
-    left: 4,
-    right: -4,
-    bottom: -4,
+    top: 5, left: 5, right: -5, bottom: -5,
     borderRadius: 21,
-    backgroundColor: 'rgba(124,58,237,0.11)',
+    backgroundColor: 'rgba(124,58,237,0.09)',
     borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.14)',
+    borderColor: 'rgba(124,58,237,0.12)',
   },
   depthA: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     borderRadius: 20,
-    backgroundColor: 'rgba(124,58,237,0.18)',
+    backgroundColor: 'rgba(124,58,237,0.16)',
     borderWidth: 1,
     borderColor: BDR,
-    marginLeft: -7,
-    borderLeftWidth: 6,
+    marginLeft: -14,
+    borderLeftWidth: 14,
     borderLeftColor: SPINE_C,
   },
+
+  // ── Physical spine with stitching dots ────────────────────────────────────
+  spine: {
+    position: 'absolute',
+    top: 12,
+    left: -14,
+    bottom: 12,
+    width: 14,
+    zIndex: 10,
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  spineStitch: {
+    width: 5,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+  },
+
+  // ── Main card ─────────────────────────────────────────────────────────────
   card: {
     backgroundColor: CARD_BG,
     borderWidth: 1,
@@ -741,6 +766,7 @@ const S = StyleSheet.create({
     elevation: 16,
   },
 
+  // ── Header ────────────────────────────────────────────────────────────────
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -753,6 +779,7 @@ const S = StyleSheet.create({
   },
   headerL: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1 },
   headerR: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
   spineDot: {
     width: 9,
     height: 9,
@@ -763,23 +790,36 @@ const S = StyleSheet.create({
     shadowOpacity: 1,
     shadowRadius: 6,
   },
+
   titleTxt: {
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 13,
-    maxWidth: 160,
+    maxWidth: 120,
+    fontFamily: 'serif',   // serif page title — diary feel
   },
-  titleHint: { color: 'rgba(167,139,250,0.45)', fontSize: 11 },
+  titleHint:  { color: 'rgba(167,139,250,0.45)', fontSize: 11 },
   titleInput: {
     color: colors.primary,
     fontWeight: '800',
     fontSize: 13,
+    fontFamily: 'serif',
     borderBottomWidth: 1,
     borderBottomColor: colors.primary + '55',
     minWidth: 80,
-    maxWidth: 160,
+    maxWidth: 120,
     paddingVertical: 2,
   },
+
+  // NEW: today's date in header
+  dateLabel: {
+    color: 'rgba(255,255,255,0.25)',
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: 'serif',
+    fontStyle: 'italic',
+  },
+
   resetBtn: {
     paddingHorizontal: 9,
     paddingVertical: 5,
@@ -789,6 +829,7 @@ const S = StyleSheet.create({
     borderColor: 'rgba(239,68,68,0.28)',
   },
   resetTxt: { color: '#F87171', fontWeight: '900', fontSize: 10 },
+
   pgBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
@@ -804,14 +845,39 @@ const S = StyleSheet.create({
     letterSpacing: 0.4,
   },
 
+  // ── NEW: Toolbar toggle row ────────────────────────────────────────────────
+  toolbarToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(0,0,0,0.15)',
+    gap: 6,
+  },
+  toolbarToggleIcon: { fontSize: 13 },
+  toolbarToggleTxt: {
+    flex: 1,
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  toolbarToggleChevron: {
+    color: 'rgba(255,255,255,0.25)',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  // ── Toolbar tabs ──────────────────────────────────────────────────────────
   tabRow: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.05)',
   },
-  tabBtn: { flex: 1, paddingVertical: 10, alignItems: 'center' },
+  tabBtn:   { flex: 1, paddingVertical: 10, alignItems: 'center' },
   tabBtnOn: { borderBottomWidth: 2, borderBottomColor: colors.primary },
-  tabTxt: { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '700' },
+  tabTxt:   { color: 'rgba(255,255,255,0.35)', fontSize: 12, fontWeight: '700' },
   tabTxtOn: { color: '#FFFFFF', fontWeight: '900' },
 
   toolWrap: {
@@ -856,27 +922,35 @@ const S = StyleSheet.create({
     borderColor: 'transparent',
   },
   swatchActive: { borderColor: '#FFFFFF', transform: [{ scale: 1.18 }] },
-  swatchLbl: { fontSize: 9, fontWeight: '800', letterSpacing: 0.2 },
+  swatchLbl:    { fontSize: 9, fontWeight: '800', letterSpacing: 0.2 },
 
-  ruled: {
+  // ── Ruled lines ───────────────────────────────────────────────────────────
+  ruledContainer: {
     position: 'absolute',
-    top: 168,
+    // top offset accounts for: header(~50) + toggle(~38) + input paddingTop(~16)
+    top: 120,
     left: 18,
     right: 18,
     bottom: 54,
     justifyContent: 'space-around',
     zIndex: 0,
   },
-  ruledLine: { height: 1, backgroundColor: 'rgba(124,58,237,0.07)' },
+  ruledLine: {
+    height: 1,
+    // IMPROVED: stronger opacity — more visible notebook paper effect
+    backgroundColor: 'rgba(124,58,237,0.10)',
+  },
 
+  // ── Input ─────────────────────────────────────────────────────────────────
   input: {
-    minHeight: 180,
+    minHeight: 200,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
     zIndex: 1,
   },
 
+  // ── Footer ────────────────────────────────────────────────────────────────
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -887,7 +961,7 @@ const S = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.24)',
     gap: 8,
   },
-  tagRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  tagRow:      { flexDirection: 'row', gap: 6, alignItems: 'center' },
   fmtTag: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -904,9 +978,10 @@ const S = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.10)',
   },
   fmtTagTxt: { color: colors.primary, fontSize: 10, fontWeight: '800' },
-  fmtDot: { width: 8, height: 8, borderRadius: 999 },
+  fmtDot:    { width: 8, height: 8, borderRadius: 999 },
   charCount: { fontSize: 11, fontWeight: '900', flexShrink: 0 },
 
+  // ── Page navigator ────────────────────────────────────────────────────────
   nav: {
     flexDirection: 'row',
     alignItems: 'center',
