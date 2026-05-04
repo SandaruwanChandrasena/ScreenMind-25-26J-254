@@ -1,22 +1,9 @@
 import { doc, setDoc, collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../../../services/firebase/firestore";
 
-import { scorePHQ9Total, scoreGAD7Total } from "../questionnaires/scoring";
+// ✅ Fixed import path
+import { scorePHQ9Total, scoreGAD7Total } from "./scoring";
 
-/**
- * Writes:
- *  1) users/{uid}/dailyUsage/{dateKey}  (merge)
- *  2) users/{uid}/assessments/{assessmentId} (create) -> triggers Cloud Function
- *
- * @param {Object} params
- * @param {string} params.uid - Firebase Auth user id
- * @param {string} params.dateKey - "YYYY-MM-DD"
- * @param {number[]} params.phq9Answers - length 9, values 0..3
- * @param {number[]} params.gad7Answers - length 7, values 0..3
- * @param {Object} [params.usageFeatures] - general screen usage features for that day
- *
- * @returns {Promise<{assessmentId: string, phq9Total: number, gad7Total: number}>}
- */
 export async function submitAssessment({
   uid,
   dateKey,
@@ -36,11 +23,8 @@ export async function submitAssessment({
   const phq9Total = scorePHQ9Total(phq9Answers);
   const gad7Total = scoreGAD7Total(gad7Answers);
 
-  // 1) Save daily usage
-
   if (usageFeatures && typeof usageFeatures === "object") {
     const usageRef = doc(db, "users", uid, "dailyUsage", dateKey);
-
     await setDoc(
       usageRef,
       {
@@ -53,23 +37,17 @@ export async function submitAssessment({
     );
   }
 
-  // 2) Create assessment doc 
-  
   const assessmentsCol = collection(db, "users", uid, "assessments");
-
   const assessmentPayload = {
     type: "PHQ9_GAD7",
     dateKey,
-
     phq9Answers,
     gad7Answers,
     phq9Total,
     gad7Total,
-
     createdAt: serverTimestamp(),
   };
 
   const docRef = await addDoc(assessmentsCol, assessmentPayload);
-
   return { assessmentId: docRef.id, phq9Total, gad7Total };
 }

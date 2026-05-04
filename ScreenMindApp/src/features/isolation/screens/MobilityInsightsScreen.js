@@ -69,11 +69,11 @@ export default function MobilityInsightsScreen() {
     loadMobilityData();
   }, []);
 
-  // Format distance in km
+  // Format distance in meters
   const formatDistance = (meters) => {
     if (!meters || meters === 0) return "--";
-    const km = (meters / 1000).toFixed(1);
-    return `${km} km`;
+    const roundedMeters = Math.round(meters);
+    return `${roundedMeters} m`;
   };
 
   // Format time at home as percentage
@@ -119,9 +119,9 @@ export default function MobilityInsightsScreen() {
           <Text style={styles.helper}>Mobility metrics loaded ✅</Text>
         )}
 
-        <Text style={styles.smallMeta}>
+        {/* <Text style={styles.smallMeta}>
           Historical records: {history.length} {history.length === 0 ? "(no stored data yet)" : ""}
-        </Text>
+        </Text> */}
 
         <View style={styles.card}>
           <Row 
@@ -129,7 +129,7 @@ export default function MobilityInsightsScreen() {
             value={formatDistance(gpsFeatures?.dailyDistanceMeters)} 
           />
           <Row 
-            label="Time at primary location" 
+            label="Time at Primary Location" 
             value={formatTimeAtHome(gpsFeatures?.timeAtHomePct)} 
           />
           <Row 

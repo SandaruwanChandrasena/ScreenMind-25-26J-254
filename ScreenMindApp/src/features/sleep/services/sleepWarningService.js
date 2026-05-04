@@ -35,16 +35,14 @@ let lastWarningSentAt = null;
 export function startLateNightWarningMonitor(sessionId = null) {
   stopLateNightWarningMonitor();
 
-  // Check every 5 minutes
+  // Check every 5 minutes while the app is active
   warningIntervalId = setInterval(async () => {
     try {
       await checkAndWarnIfLateNight(sessionId);
     } catch (e) {
       console.log('Late night check error:', e);
     }
-  }, 10 * 1000);
-
-  //  }, 5 * 60 * 1000);
+  }, 5 * 60 * 1000);
 
   console.log('⏰ Late night warning monitor started', sessionId ? `(session ${sessionId})` : '(passive)');
 }
@@ -62,7 +60,7 @@ async function checkAndWarnIfLateNight(sessionId) {
 
   // Only warn during the user's night window
   const isNight = isWithinNightWindow(now, settings);
-  // if (!isNight) return;
+  if (!isNight) return;
 
   // Cooldown — don't spam the user
   if (lastWarningSentAt && (now - lastWarningSentAt) < WARNING_COOLDOWN_MS) {

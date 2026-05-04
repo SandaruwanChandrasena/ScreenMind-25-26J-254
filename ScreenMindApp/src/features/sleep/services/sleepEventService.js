@@ -1,7 +1,7 @@
 // src/features/sleep/services/sleepEventService.js
 
 import { NativeModules, NativeEventEmitter } from "react-native";
-import { logScreenEvent } from "./sleepRepository";
+import { logScreenEvent, logChargingEvent } from "./sleepRepository";
 
 const { SleepEventModule } = NativeModules;
 

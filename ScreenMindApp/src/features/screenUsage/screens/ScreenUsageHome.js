@@ -1,4 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import { getUsageStats } from '../services/usageStatsNative';
+import { predictScreenlogRisk } from '../services/screenlogsApi';
+import { extractUsageFeatures } from '../services/extractUsageFeatures';
 import {
   View,
   Text,
@@ -6,6 +9,7 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -29,6 +33,7 @@ function getRiskColor(riskLevel = '') {
     case 'high':
       return '#ef4444';
     case 'medium':
+    case 'moderate':
       return '#f59e0b';
     case 'low':
       return '#22c55e';
@@ -42,7 +47,8 @@ function getRiskLabel(riskLevel = '') {
     case 'high':
       return '⚠️ High Risk';
     case 'medium':
-      return '🔶 Medium Risk';
+    case 'moderate':
+      return '🔶 Moderate Risk';
     case 'low':
       return '✅ Low Risk';
     default:
@@ -50,13 +56,69 @@ function getRiskLabel(riskLevel = '') {
   }
 }
 
+function getRecommendation(riskLevel = '') {
+  switch (riskLevel?.toLowerCase()) {
+    case 'high':
+      return 'Your result shows a high risk level. Try reducing long screen sessions, take regular breaks, and consider talking to a trusted person or professional if you feel overwhelmed.';
+    case 'medium':
+    case 'moderate':
+      return 'Your result shows a moderate risk level. Try reducing repeated phone checking and maintain a more consistent daily usage routine.';
+    case 'low':
+      return 'Your result shows a low risk level. Continue maintaining healthy phone usage habits and regular daily routines.';
+    default:
+      return 'Complete an analysis to receive a personalized recommendation.';
+  }
+}
+
+function getQuestionnaireScores(latest) {
+  const phq9Raw =
+    latest?.phq9?.score ??
+    latest?.phq9?.total ??
+    latest?.phq9?.totalScore ??
+    latest?.phq9?.phq9Score ??
+    latest?.result?.phq9?.score ??
+    latest?.result?.phq9Score ??
+    latest?.phq9Score ??
+    0;
+
+  const gad7Raw =
+    latest?.gad7?.score ??
+    latest?.gad7?.total ??
+    latest?.gad7?.totalScore ??
+    latest?.gad7?.gad7Score ??
+    latest?.result?.gad7?.score ??
+    latest?.result?.gad7Score ??
+    latest?.gad7Score ??
+    0;
+
+  return {
+    phq9Score: Number(phq9Raw) || 0,
+    gad7Score: Number(gad7Raw) || 0,
+  };
+}
+
+function ActionButton({ label, icon, onPress, disabled, loading }) {
+  return (
+    <Pressable
+      style={[styles.gridBtn, disabled && styles.disabledBtn]}
+      onPress={onPress}
+      disabled={disabled || loading}
+    >
+      <Text style={styles.gridIcon}>{icon}</Text>
+      <Text style={styles.gridText}>{loading ? 'Analyzing...' : label}</Text>
+    </Pressable>
+  );
+}
+
 export default function ScreenUsageHome({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [latest, setLatest] = useState(null);
   const [daysRemaining, setDaysRemaining] = useState(0);
   const [assessmentCount, setAssessmentCount] = useState(0);
+  const [prediction, setPrediction] = useState(null);
+  const [predicting, setPredicting] = useState(false);
+  const [lastPayload, setLastPayload] = useState(null);
 
-  // Reload data every time the screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadAssessment();
@@ -78,6 +140,7 @@ export default function ScreenUsageHome({ navigation }) {
       const submitted = new Date(last.submittedAt).getTime();
       const now = Date.now();
       const diff = now - submitted;
+
       const remaining = Math.ceil(
         (TWO_WEEKS_MS - diff) / (1000 * 60 * 60 * 24),
       );
@@ -92,6 +155,42 @@ export default function ScreenUsageHome({ navigation }) {
     }
   }
 
+  const handlePredict = async () => {
+    try {
+      setPredicting(true);
+      setPrediction(null);
+
+      const rawUsageData = await getUsageStats();
+      const rawFeatures = extractUsageFeatures(rawUsageData);
+      const { phq9Score, gad7Score } = getQuestionnaireScores(latest);
+
+      const payload = {
+        phq9_score: phq9Score,
+        gad7_score: gad7Score,
+        screen_time_dev: Number(rawFeatures?.screen_time_dev ?? 0),
+        session_fragmentation: Number(rawFeatures?.session_fragmentation ?? 0),
+        app_switching: Number(rawFeatures?.app_switching ?? 0),
+        repeated_checking: Number(rawFeatures?.repeated_checking ?? 0),
+        usage_irregularity: Number(rawFeatures?.usage_irregularity ?? 0),
+      };
+
+      console.log('[ScreenUsageHome] FINAL PAYLOAD:', payload);
+
+      setLastPayload(payload);
+
+      const result = await predictScreenlogRisk(payload);
+      setPrediction(result);
+    } catch (error) {
+      console.error('[ScreenUsageHome] predict error:', error);
+      Alert.alert(
+        'Prediction Error',
+        error?.message || 'Failed to analyze usage risk.',
+      );
+    } finally {
+      setPredicting(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loading}>
@@ -101,31 +200,48 @@ export default function ScreenUsageHome({ navigation }) {
     );
   }
 
+  if (!latest) return null;
+
   const lastDate = new Date(latest.submittedAt).toLocaleDateString();
-  const riskLevel = latest?.result?.riskLevel || latest?.riskLevel || '';
+
+  const riskLevel =
+    latest?.result?.riskLevel ||
+    latest?.result?.risk ||
+    latest?.result?.overallRisk ||
+    latest?.riskLevel ||
+    latest?.risk ||
+    latest?.overallRisk ||
+    '';
+
   const isDue = daysRemaining === 0;
+  const canViewDashboard = Boolean(prediction && lastPayload);
 
   return (
     <ScrollView contentContainerStyle={styles.root}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Screen Mind</Text>
-        <Text style={styles.headerSub}>Mental Health Risk Monitor</Text>
+      <View style={styles.headerRow}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backIcon}>←</Text>
+        </Pressable>
+
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Screen Mind</Text>
+          <Text style={styles.headerSub}>Mental Health Risk Monitor</Text>
+        </View>
+
+        <View style={styles.headerSpacer} />
       </View>
 
-      {/* Risk Summary Card */}
       {riskLevel ? (
         <View
           style={[styles.riskCard, { borderColor: getRiskColor(riskLevel) }]}
         >
-          <Text style={styles.riskLabel}>Current Risk Level</Text>
+          <Text style={styles.riskLabel}>Questionnaire Risk Level</Text>
           <Text style={[styles.riskValue, { color: getRiskColor(riskLevel) }]}>
             {getRiskLabel(riskLevel)}
           </Text>
         </View>
       ) : null}
 
-      {/* Assessment Info Card */}
       <View style={styles.card}>
         <Text style={styles.title}>Assessment History</Text>
 
@@ -146,42 +262,103 @@ export default function ScreenUsageHome({ navigation }) {
           </Text>
         </View>
 
-        {/* Action Buttons */}
-        <View style={styles.buttons}>
-          <Pressable
-            style={styles.primaryBtn}
+        <View style={styles.buttonGrid}>
+          <ActionButton
+            label="Analyze"
+            icon="🧠"
+            onPress={handlePredict}
+            loading={predicting}
+          />
+
+          <ActionButton
+            label="Dashboard"
+            icon="📊"
+            disabled={!canViewDashboard}
             onPress={() =>
-              navigation.navigate('MentalHealthDashboard', { result: latest })
+              navigation.navigate('MentalHealthDashboard', {
+                result: latest,
+                prediction,
+                payload: lastPayload,
+              })
             }
-          >
-            <Text style={styles.btnText}>📊 View Dashboard</Text>
-          </Pressable>
+          />
 
-          <Pressable
-            style={styles.secondaryBtn}
-            onPress={() => navigation.navigate('PredictionHistoryScreen')}
-          >
-            <Text style={styles.btnText}>📋 View History</Text>
-          </Pressable>
+          <ActionButton
+            label="Usage"
+            icon="📱"
+            onPress={() => navigation.navigate('TestUsage')}
+          />
 
-          <Pressable
-            style={[styles.outlineBtn, isDue && styles.outlineBtnDue]}
+          <ActionButton
+            label={isDue ? 'Retake Due' : 'Retake'}
+            icon="🔁"
             onPress={() => navigation.navigate('QuestionnaireScreen')}
-          >
-            <Text style={styles.btnText}>
-              {isDue ? '🔁 Retake Assessment (Due)' : '🔁 Retake Assessment'}
-            </Text>
-          </Pressable>
+          />
+
+          <ActionButton
+            label="History"
+            icon="📋"
+            onPress={() => navigation.navigate('PredictionHistoryScreen')}
+          />
         </View>
+
+        {!canViewDashboard && (
+          <Text style={styles.helperText}>
+            Analyze usage risk first to unlock the dashboard.
+          </Text>
+        )}
       </View>
 
-      {/* Test Usage Data Button (dev helper) */}
-      <Pressable
-        style={styles.devBtn}
-        onPress={() => navigation.navigate('TestUsage')}
-      >
-        <Text style={styles.devBtnText}>🧪 Test Usage Data</Text>
-      </Pressable>
+      {prediction && (
+        <View style={styles.card}>
+          <Text style={styles.title}>Prediction Result</Text>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>PHQ-9 score</Text>
+            <Text style={styles.infoValue}>{lastPayload?.phq9_score ?? 0}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>GAD-7 score</Text>
+            <Text style={styles.infoValue}>{lastPayload?.gad7_score ?? 0}</Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Final ML risk</Text>
+            <Text
+              style={[
+                styles.infoValue,
+                { color: getRiskColor(prediction.predicted_risk) },
+              ]}
+            >
+              {getRiskLabel(prediction.predicted_risk)}
+            </Text>
+          </View>
+
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>Confidence</Text>
+            <Text style={styles.infoValue}>
+              {(prediction.confidence * 100).toFixed(2)}%
+            </Text>
+          </View>
+
+          <View style={styles.recommendationBox}>
+            <Text style={styles.recommendationTitle}>💡 Recommendation</Text>
+            <Text style={styles.recommendationText}>
+              {getRecommendation(prediction.predicted_risk)}
+            </Text>
+          </View>
+
+          <View style={styles.factorSection}>
+            <Text style={styles.infoLabel}>Top factors</Text>
+            {prediction.top_factors?.map((factor, index) => (
+              <Text key={index} style={styles.factorItem}>
+                • {factor}
+              </Text>
+            ))}
+          </View>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -203,9 +380,29 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontWeight: '700',
   },
-  header: {
-    marginBottom: spacing.lg,
+  headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  backButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backIcon: {
+    fontSize: 26,
+    color: colors.text,
+    fontWeight: '900',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerSpacer: {
+    width: 34,
   },
   headerTitle: {
     fontSize: 26,
@@ -257,6 +454,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: spacing.sm,
+    gap: spacing.md,
   },
   infoLabel: {
     color: colors.muted,
@@ -266,52 +464,68 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '700',
     fontSize: 14,
+    textAlign: 'right',
+    flexShrink: 1,
   },
-  buttons: {
+  buttonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 12,
     marginTop: spacing.lg,
-    gap: spacing.md,
   },
-  primaryBtn: {
+  gridBtn: {
+    width: '48%',
     backgroundColor: 'rgba(124,58,237,0.85)',
-    paddingVertical: 14,
-    borderRadius: 14,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: 'center',
   },
-  secondaryBtn: {
-    backgroundColor: 'rgba(124,58,237,0.45)',
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
+  gridIcon: {
+    fontSize: 18,
+    marginBottom: 6,
   },
-  outlineBtn: {
-    borderWidth: 1,
-    borderColor: 'rgba(124,58,237,0.6)',
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  outlineBtnDue: {
-    borderColor: '#ef4444',
-    backgroundColor: 'rgba(239,68,68,0.1)',
-  },
-  btnText: {
+  gridText: {
     color: '#fff',
     fontWeight: '900',
-    fontSize: 14,
+    fontSize: 13,
   },
-  devBtn: {
-    alignSelf: 'center',
-    marginTop: spacing.sm,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 10,
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
+  disabledBtn: {
+    opacity: 0.45,
   },
-  devBtnText: {
-    color: '#64748b',
+  helperText: {
+    color: colors.faint,
     fontSize: 12,
     fontWeight: '700',
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  factorSection: {
+    marginTop: spacing.md,
+  },
+  factorItem: {
+    color: colors.text,
+    fontSize: 14,
+    marginTop: 6,
+    fontWeight: '600',
+  },
+  recommendationBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: 14,
+    backgroundColor: 'rgba(124,58,237,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(124,58,237,0.35)',
+  },
+  recommendationTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  recommendationText: {
+    color: colors.muted,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

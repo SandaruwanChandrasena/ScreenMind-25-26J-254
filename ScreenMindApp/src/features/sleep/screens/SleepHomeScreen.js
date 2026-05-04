@@ -10,6 +10,7 @@ import {
   // NativeEventEmitter,
   NativeModules,
 } from "react-native";
+import Svg, { Circle } from "react-native-svg";
 
 import DashboardBackground from "../../../components/DashboardBackground";
 import PrimaryButton from "../../../components/PrimaryButton";
@@ -46,6 +47,11 @@ import {
   stopLateNightWarningMonitor,
   scheduleBedtimeReminder
 } from '../services/sleepWarningService';
+
+import {
+  syncPendingSleepSessionsToFirebase,
+  syncSleepSessionToFirebase,
+} from '../services/sleepFirebaseSync';
 
 const { SleepServiceModule } = NativeModules;
 
@@ -103,16 +109,25 @@ function Divider() {
   return <View style={styles.divider} />;
 }
 
+function normalizeRiskScore(score) {
+  const value = Number(score);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return value <= 1 ? value * 100 : value;
+}
+
 /**
- * Pure-RN circular donut chart. No external library.
+ * SVG donut chart.
  * score: 0–100 (higher = worse disruption risk)
  * risk: "Low" | "Medium" | "High"
  */
 function DonutChart({ score, risk }) {
   const SIZE = 150;
   const STROKE = 14;
-  const isValid = typeof score === "number" && !isNaN(score);
-  const pct = isValid ? Math.max(0, Math.min(100, score)) : 0;
+  const normalizedScore = normalizeRiskScore(score);
+  const pct = Math.max(0, Math.min(100, normalizedScore));
+  const radius = (SIZE - STROKE) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (pct / 100) * circumference;
 
   // Color based on risk
   const arcColor =
@@ -125,69 +140,39 @@ function DonutChart({ score, risk }) {
   const riskEmoji =
     risk === "High" ? "🔴" : risk === "Medium" ? "🟡" : "🟢";
 
-  // Half-circle rotation technique
-  const half = SIZE / 2;
-  const innerSize = SIZE - STROKE * 2;
-
-  // We render two halves to form the arc
-  const deg1 = Math.min(180, (pct / 100) * 360);
-  const deg2 = Math.max(0, (pct / 100) * 360 - 180);
-
   return (
     <View style={donutStyles.wrapper}>
-      {/* Donut ring */}
-      <View style={[donutStyles.ring, { width: SIZE, height: SIZE, borderRadius: SIZE / 2, backgroundColor: "rgba(255,255,255,0.06)" }]}>
-        {/* Left half clip */}
-        <View style={[donutStyles.halfClip, { left: 0 }]}>
-          <View
-            style={[
-              donutStyles.half,
-              {
-                width: half,
-                height: SIZE,
-                borderTopLeftRadius: half,
-                borderBottomLeftRadius: half,
-                backgroundColor: pct > 50 ? arcColor : "rgba(255,255,255,0.06)",
-                transform: [{ rotateY: "180deg" }, { rotateZ: `${deg2}deg` }],
-                transformOrigin: `${half}px ${half}px`,
-              },
-            ]}
+      <View style={[donutStyles.ring, { width: SIZE, height: SIZE }]}>
+        <Svg width={SIZE} height={SIZE}>
+          <Circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={radius}
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth={STROKE}
+            fill="transparent"
           />
-        </View>
-        {/* Right half clip */}
-        <View style={[donutStyles.halfClip, { right: 0 }]}>
-          <View
-            style={[
-              donutStyles.half,
-              {
-                width: half,
-                height: SIZE,
-                borderTopRightRadius: half,
-                borderBottomRightRadius: half,
-                backgroundColor: pct > 0 ? arcColor : "rgba(255,255,255,0.06)",
-                transform: [{ rotateZ: `${-deg1}deg` }],
-                transformOrigin: `0px ${half}px`,
-              },
-            ]}
+          <Circle
+            cx={SIZE / 2}
+            cy={SIZE / 2}
+            r={radius}
+            stroke={arcColor}
+            strokeWidth={STROKE}
+            fill="transparent"
+            strokeDasharray={`${circumference} ${circumference}`}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            rotation="-90"
+            originX={SIZE / 2}
+            originY={SIZE / 2}
           />
-        </View>
-        {/* Inner circle (creates donut hole) */}
-        <View
-          style={[
-            donutStyles.inner,
-            {
-              width: innerSize,
-              height: innerSize,
-              borderRadius: innerSize / 2,
-              top: STROKE,
-              left: STROKE,
-            },
-          ]}
-        >
+        </Svg>
+
+        <View style={donutStyles.inner}>
           <Text style={donutStyles.scoreNum}>
-            {isValid ? pct : "—"}
+            {Math.round(pct)}%
           </Text>
-          <Text style={donutStyles.scoreUnit}>/ 100</Text>
+          <Text style={donutStyles.scoreUnit}>Sleep risk</Text>
           <Text style={donutStyles.riskLabel}>
             {riskEmoji} {risk || "—"}
           </Text>
@@ -200,7 +185,7 @@ function DonutChart({ score, risk }) {
         <LegendDot color="#FBBF24" label="Med" />
         <LegendDot color="#F87171" label="High" />
       </View> */}
-      
+
     </View>
   );
 }
@@ -216,28 +201,25 @@ function LegendDot({ color, label }) {
 
 const donutStyles = StyleSheet.create({
   wrapper: { alignItems: "center", paddingVertical: 8 },
-  ring: { position: "relative", overflow: "hidden" },
-  halfClip: {
-    position: "absolute",
-    top: 0,
-    bottom: 0,
-    width: "50%",
-    overflow: "hidden",
-  },
-  half: { position: "absolute", top: 0 },
+  ring: { position: "relative", alignItems: "center", justifyContent: "center" },
   inner: {
     position: "absolute",
+    width: 118,
+    height: 118,
+    borderRadius: 59,
     backgroundColor: "#12122A",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.06)",
   },
   scoreNum: {
     color: "#E2E8F0",
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "900",
     lineHeight: 30,
   },
-  scoreUnit: { color: "rgba(148,163,184,0.7)", fontSize: 11, fontWeight: "700" },
+  scoreUnit: { color: "rgba(148,163,184,0.72)", fontSize: 11, fontWeight: "800", marginTop: 2 },
   riskLabel: { color: "#E2E8F0", fontSize: 11, fontWeight: "900", marginTop: 4 },
   legend: { flexDirection: "row", gap: 12, marginTop: 10 },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
@@ -322,6 +304,7 @@ export default function SleepHomeScreen({ navigation }) {
   //   }
   // }, [userId]);
 
+  // Load dashboard: show a fast local score first, then try ML/API in background
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     try {
@@ -337,62 +320,86 @@ export default function SleepHomeScreen({ navigation }) {
 
       setLatestSummary(summary);
 
-      // Try ML risk prediction first
-      let riskResult = null;
-
-      const last7 = await getLast7Sessions(userId);
-
-      if (last7 && last7.length === 7) {
-        // Build features for ML model
-        const features = buildFeaturesFromSessions(last7);
-
-        // Call ML API
-        const mlResult = await predictSleepRiskML(features);
-
-        if (mlResult) {
-          riskResult = {
-            score: mlResult.risk_score,
-            risk: mlResult.risk_category,
-            reasons: [],
-            source: 'ML Model',
-          };
-        }
+      // Immediately compute a local score for fast UX
+      try {
+        const localScore = computeDisruptionScore(summary);
+        localScore.source = 'Local';
+        setRiskResult(localScore);
+      } catch (e) {
+        console.log('Local scoring error:', e);
       }
 
-      // Fallback to rule-based if ML not available
-      if (!riskResult) {
-        const apiResult = await computeRiskScore({
-          screen_time_after_10pm: summary.screenOnCount * 8,
-          social_media_mins_night: summary.socialNotifCount * 5,
-          last_screen_off_hour:
-            new Date(summary.end || Date.now()).getHours(),
-          unlock_count_night: summary.unlockCount,
-          notification_count_night: summary.nightNotifCount,
-          restlessness_score: 0,
-          snoring_duration_mins: summary.snoringTotalMinutes ?? 0,
-          sleep_quality_rating: summary.checkIn?.sleep_quality,
-        });
+      // Run ML / API scoring in background with timeouts and update UI if available
+      (async () => {
+        const withTimeout = (p, ms) => {
+          return Promise.race([
+            p,
+            new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms)),
+          ]);
+        };
 
-        if (apiResult) {
-          riskResult = {
-            score: apiResult.risk_score,
-            risk: apiResult.risk_category,
-            reasons: apiResult.reasons,
-            breakdown: apiResult.breakdown,
-            source: 'Rule-Based',
-          };
-        } else {
-          // Last resort: local scoring
-          riskResult = computeDisruptionScore(summary);
-          riskResult.source = 'Local';
+        try {
+          let updated = null;
+
+          const last7 = await getLast7Sessions(userId);
+
+          if (last7 && last7.length === 7) {
+            const features = buildFeaturesFromSessions(last7);
+            try {
+              const mlResult = await withTimeout(predictSleepRiskML(features), 8000);
+              if (mlResult && Number(mlResult.risk_score) > 0) {
+                updated = {
+                  score: mlResult.risk_score,
+                  risk: mlResult.risk_category,
+                  reasons: [],
+                  source: 'ML Model',
+                };
+              }
+            } catch (e) {
+              console.log('ML prediction timeout/error:', e.message || e);
+            }
+          }
+
+          if (!updated) {
+            try {
+              const apiResult = await withTimeout(
+                computeRiskScore({
+                  screen_time_after_10pm: summary.screenOnCount * 8,
+                  social_media_mins_night: summary.socialNotifCount * 5,
+                  last_screen_off_hour: new Date(summary.end || Date.now()).getHours(),
+                  unlock_count_night: summary.unlockCount,
+                  notification_count_night: summary.nightNotifCount,
+                  restlessness_score: 0,
+                  snoring_duration_mins: summary.snoringTotalMinutes ?? 0,
+                  sleep_quality_rating: summary.checkIn?.sleep_quality,
+                }),
+                8000
+              );
+
+              if (apiResult && Number(apiResult.risk_score) > 0) {
+                updated = {
+                  score: apiResult.risk_score,
+                  risk: apiResult.risk_category,
+                  reasons: apiResult.reasons,
+                  breakdown: apiResult.breakdown,
+                  source: 'Rule-Based',
+                };
+              }
+            } catch (e) {
+              console.log('Rule-based prediction timeout/error:', e.message || e);
+            }
+          }
+
+          if (updated) setRiskResult(updated);
+        } catch (e) {
+          console.log('Background risk compute error:', e);
         }
-      }
-
-      setRiskResult(riskResult);
+      })();
 
     } catch (e) {
       console.log("Dashboard load error:", e);
     } finally {
+      // Ensure loading is false (local score already shown)
       setLoading(false);
     }
   }, [userId]);
@@ -406,6 +413,16 @@ export default function SleepHomeScreen({ navigation }) {
     });
 
     loadDashboard();
+
+    syncPendingSleepSessionsToFirebase()
+      .then(result => {
+        if (result?.uploaded > 0) {
+          console.log(`✅ Synced ${result.uploaded} sleep session(s) to Firebase`);
+        }
+      })
+      .catch(error => {
+        console.log("Sleep Firebase backfill error:", error);
+      });
   }, [loadDashboard]);
 
   const isRunning = !!runningSessionId;
@@ -548,6 +565,13 @@ export default function SleepHomeScreen({ navigation }) {
       startLateNightWarningMonitor(); // downgrade back to passive mode (no session)
 
       await stopSleepSession({ sessionId });
+
+      try {
+        await syncSleepSessionToFirebase(sessionId);
+      } catch (syncError) {
+        console.log("Sleep Firebase sync error:", syncError);
+      }
+
       setRunningSessionId(null);
       await loadDashboard();
       Alert.alert("Stopped ✅",
@@ -717,7 +741,7 @@ export default function SleepHomeScreen({ navigation }) {
             navigation.navigate("SleepDetails", { sessionId: runningSessionId })
           }
         >
-          <Text style={styles.tabIcon}>�</Text>
+          <Text style={styles.tabIcon}>📋</Text>
           <Text style={styles.tabLabel}>Details</Text>
         </Pressable>
 
@@ -738,7 +762,7 @@ export default function SleepHomeScreen({ navigation }) {
           style={styles.tabItem}
           onPress={() => navigation.navigate("SleepSchedule")}
         >
-          <Text style={styles.tabIcon}>�️</Text>
+          <Text style={styles.tabIcon}>📅</Text>
           <Text style={styles.tabLabel}>Schedule</Text>
         </Pressable>
       </View>
