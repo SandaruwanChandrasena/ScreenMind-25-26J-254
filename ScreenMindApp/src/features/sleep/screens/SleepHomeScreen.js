@@ -707,6 +707,21 @@ export default function SleepHomeScreen({ navigation }) {
               ))}
             </>
           )}
+
+          {/* Get Recommendations Button */}
+          {!!latestSummary && (
+            <>
+              <View style={styles.divider} />
+              <Pressable
+                style={styles.recommendBtn}
+                onPress={() =>
+                  navigation.navigate("SleepRecommendations", { sessionId: latestSummary?.sessionId })
+                }
+              >
+                <Text style={styles.recommendBtnText}>💡 Get Personalized Recommendations</Text>
+              </Pressable>
+            </>
+          )}
         </Card>
 
         {/* Empty State */}
@@ -902,6 +917,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     lineHeight: 18,
+  },
+
+  recommendBtn: {
+    marginTop: spacing.sm,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary2,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  recommendBtnText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 14,
   },
 
   // ══════════════════════════════════
