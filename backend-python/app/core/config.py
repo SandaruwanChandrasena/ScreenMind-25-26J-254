@@ -7,9 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ─── Firebase Initialization ──────────────────────────────────────────────────
-# Thread-safe singleton using double-checked locking pattern.
-# Ensures Firebase is initialized only once even under concurrent requests
-# or uvicorn --reload restarts during development.
+# Thread-safe singleton using double-checked locking pattern. It have only one instance of Firestore client across the app, initialized lazily on first use. This avoids unnecessary initialization and ensures thread safety in a multi-threaded environment like FastAPI.
 # ─────────────────────────────────────────────────────────────────────────────
 _db   = None
 _lock = threading.Lock()

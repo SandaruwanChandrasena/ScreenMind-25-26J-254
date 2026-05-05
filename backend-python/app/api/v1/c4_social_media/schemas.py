@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 # ─── INPUT ────────────────────────────────────────────────────────────────────
+# Data validation
 
 class NotificationAnalysisRequest(BaseModel):
     """What React Native sends to the Python server."""
