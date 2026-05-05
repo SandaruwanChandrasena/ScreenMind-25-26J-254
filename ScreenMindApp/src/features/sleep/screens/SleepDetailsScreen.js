@@ -685,6 +685,20 @@ export default function SleepDetailsScreen({ route, navigation }) {
                 <NoCheckInCard navigation={navigation} />
               )
             )}
+
+            {/* Get Recommendations Button */}
+            {summary && (
+              <Card style={{ marginTop: spacing.lg, backgroundColor: colors.bg2 }}>
+                <Pressable
+                  style={styles.recommendationsBtn}
+                  onPress={() =>
+                    navigation.navigate("SleepRecommendations", { sessionId: summary.sessionId })
+                  }
+                >
+                  <Text style={styles.recommendationsBtnText}>💡 Get Personalized Recommendations</Text>
+                </Pressable>
+              </Card>
+            )}
           </>
         )}
 
@@ -859,4 +873,17 @@ const styles = StyleSheet.create({
   noCheckInEmoji: { fontSize: 40, marginBottom: 12 },
   noCheckInTitle: { color: colors.text, fontWeight: "900", fontSize: 16, textAlign: "center" },
   noCheckInSub: { color: colors.muted, fontSize: 12, lineHeight: 18, textAlign: "center", marginTop: 8 },
+
+  // Recommendations button
+  recommendationsBtn: {
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary2,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  recommendationsBtnText: {
+    color: "#ffffff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
 });

@@ -113,7 +113,7 @@ export default function BehaviourInsightsScreen() {
     const socialPct = pickSocialPct(totalMins, socialMins);
 
     return [
-      // { k: "Unlock count/day", v: unlocks == null ? "--" : `${unlocks}` },
+      { k: "Activation events/day", v: unlocks == null ? "--" : `${unlocks}` },
       { k: "Night phone usage", v: nightMins == null ? "--" : formatMinutes(nightMins) },
       { k: "Screen time (today)", v: totalMins == null ? "--" : formatMinutes(totalMins) },
       {
@@ -121,7 +121,7 @@ export default function BehaviourInsightsScreen() {
         v:
           socialMins == null || socialPct == null
             ? "--"
-            : `${formatMinutes(socialMins)} • ${socialPct}%`,
+            : `${formatMinutes(socialMins)}`,
       },
     ];
   }, [stats, today]);

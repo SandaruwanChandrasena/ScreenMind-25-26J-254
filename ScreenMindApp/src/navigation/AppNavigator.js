@@ -47,6 +47,7 @@ import MorningCheckInScreen from '../features/sleep/screens/MorningCheckInScreen
 import SleepDetailsScreen from '../features/sleep/screens/SleepDetailsScreen';
 import DataPermissionsScreen from '../features/sleep/screens/DataPermissionsScreen';
 import SnoringScreen from '../features/sleep/screens/SnoringScreen';
+import SleepRecommendationsScreen from '../features/sleep/screens/SleepRecommendationsScreen';
 import SleepScheduleScreen from '../features/sleep/screens/SleepScheduleScreen';
 
 /* ========================= */
@@ -303,6 +304,12 @@ export default function AppNavigator() {
               name="SleepDetails"
               component={SleepDetailsScreen}
               options={{ title: 'Sleep Details' }}
+            />
+
+            <Stack.Screen
+              name="SleepRecommendations"
+              component={SleepRecommendationsScreen}
+              options={{ title: 'Recommendations' }}
             />
 
             <Stack.Screen

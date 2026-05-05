@@ -128,10 +128,10 @@ export default function MobilityInsightsScreen() {
             label="Daily distance" 
             value={formatDistance(gpsFeatures?.dailyDistanceMeters)} 
           />
-          <Row 
+          {/* <Row 
             label="Time at Primary Location" 
             value={formatTimeAtHome(gpsFeatures?.timeAtHomePct)} 
-          />
+          /> */}
           <Row 
             label="Location entropy" 
             value={formatEntropy(gpsFeatures?.locationEntropy)} 
